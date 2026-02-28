@@ -1,10 +1,11 @@
-
+// super-admin.js - CORREGIDO (con window.supabase)
 
 // Tu email de super admin
 const SUPER_ADMIN_EMAIL = 'rservasroma@gmail.com';
 
 async function verificarAcceso() {
-    const { data: { user } } = await supabase.auth.getUser();
+    // ✅ USAR window.supabase
+    const { data: { user } } = await window.supabase.auth.getUser();
     
     if (!user || user.email !== SUPER_ADMIN_EMAIL) {
         document.getElementById('app').innerHTML = `
@@ -24,7 +25,8 @@ async function verificarAcceso() {
 }
 
 async function cargarNegocios() {
-    const { data, error } = await supabase
+    // ✅ USAR window.supabase
+    const { data, error } = await window.supabase
         .from('vista_negocios_admin')
         .select('*')
         .order('fecha_registro', { ascending: false });
