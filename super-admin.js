@@ -1,7 +1,4 @@
-const supabase = window.supabase.createClient(
-    window.SUPABASE_URL,
-    window.SUPABASE_ANON_KEY
-);
+
 
 // Tu email de super admin
 const SUPER_ADMIN_EMAIL = 'rservasroma@gmail.com';
