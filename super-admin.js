@@ -1,31 +1,17 @@
-// super-admin.js - CORREGIDO (con window.supabase)
-
-// Tu email de super admin
-const SUPER_ADMIN_EMAIL = 'rservasroma@gmail.com';
+// super-admin.js - CON REDIRECCIÓN A LOGIN
 
 async function verificarAcceso() {
-    // ✅ USAR window.supabase
     const { data: { user } } = await window.supabase.auth.getUser();
     
-    if (!user || user.email !== SUPER_ADMIN_EMAIL) {
-        document.getElementById('app').innerHTML = `
-            <div class="min-h-screen flex items-center justify-center">
-                <div class="bg-white p-8 rounded-lg shadow text-center">
-                    <h1 class="text-2xl font-bold text-red-600 mb-4">Acceso Denegado</h1>
-                    <p class="text-gray-600">No tenés permiso para ver esta página.</p>
-                    <a href="https://tusalon.github.io/Rservas.Roma/" class="inline-block mt-4 text-pink-600">
-                        Ir a Rservas.Roma
-                    </a>
-                </div>
-            </div>
-        `;
+    // Si no hay usuario o no es el super admin, redirigir al login
+    if (!user || user.email !== 'rservasroma@gmail.com') {
+        window.location.href = 'login.html';
         return false;
     }
     return true;
 }
 
 async function cargarNegocios() {
-    // ✅ USAR window.supabase
     const { data, error } = await window.supabase
         .from('vista_negocios_admin')
         .select('*')
@@ -45,7 +31,12 @@ async function cargarNegocios() {
 function renderTabla(negocios) {
     let html = `
         <div class="max-w-7xl mx-auto p-6">
-            <h1 class="text-2xl font-bold mb-4">👑 Super Admin</h1>
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold">👑 Super Admin</h1>
+                <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
+                    Cerrar sesión
+                </button>
+            </div>
             <p class="text-gray-600 mb-6">${negocios.length} negocios</p>
             <div class="grid gap-4">
     `;
@@ -89,6 +80,12 @@ function renderTabla(negocios) {
     html += '</div></div>';
     document.getElementById('app').innerHTML = html;
 }
+
+// Función de logout
+window.logout = async function() {
+    await window.supabase.auth.signOut();
+    window.location.href = 'login.html';
+};
 
 async function init() {
     const acceso = await verificarAcceso();
