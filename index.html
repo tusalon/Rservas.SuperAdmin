@@ -6,9 +6,28 @@
     <title>Super Admin - Rservas</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .modal {
+            transition: all 0.3s ease;
+        }
+        .fade-in {
+            animation: fadeIn 0.2s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .btn-action {
+            transition: all 0.2s ease;
+        }
+        .btn-action:hover {
+            transform: scale(1.02);
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <div id="app"></div>
+    <div id="modal-root"></div>
 
     <script src="supabase-config.js"></script>
     <script src="super-admin.js"></script>
