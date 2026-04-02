@@ -41,21 +41,6 @@
                 min-height: 44px;
             }
         }
-        /* Fix para menú en móvil */
-        .dropdown-menu {
-            position: fixed !important;
-            right: 16px !important;
-            left: auto !important;
-            width: 280px !important;
-            max-width: calc(100vw - 32px) !important;
-        }
-        @media (max-width: 640px) {
-            .dropdown-menu {
-                width: calc(100vw - 32px) !important;
-                right: 16px !important;
-                left: 16px !important;
-            }
-        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -70,7 +55,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').then(reg => {
-                    console.log('✅ Service Worker registrado:', reg.scope);
+                    console.log('✅ Service Worker registrado');
                 }).catch(err => {
                     console.log('❌ Service Worker error:', err);
                 });
