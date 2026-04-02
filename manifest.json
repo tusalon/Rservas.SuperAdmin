@@ -1,18 +1,20 @@
 {
   "name": "Rservas Super Admin",
   "short_name": "Rservas Admin",
-  "start_url": ".",
+  "description": "Panel de control para administrar negocios Rservas",
+  "start_url": "/Rservas.SuperAdmin/",
+  "scope": "/Rservas.SuperAdmin/",
   "display": "standalone",
+  "background_color": "#7c3aed",
   "theme_color": "#7c3aed",
-  "background_color": "#ffffff",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "/Rservas.SuperAdmin/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/Rservas.SuperAdmin/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
