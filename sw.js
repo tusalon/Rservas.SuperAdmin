@@ -1,19 +1,18 @@
-const CACHE_NAME = 'rservas-admin-v1';
+const CACHE_NAME = 'rservas-admin-v2';
 const urlsToCache = [
-  '/Rservas.SuperAdmin/',
-  '/Rservas.SuperAdmin/index.html',
-  '/Rservas.SuperAdmin/login.html',
-  '/Rservas.SuperAdmin/supabase-config.js',
-  '/Rservas.SuperAdmin/super-admin.js',
-  '/Rservas.SuperAdmin/manifest.json',
-  '/Rservas.SuperAdmin/icons/icon-72x72.png',
-  '/Rservas.SuperAdmin/icons/icon-96x96.png',
-  '/Rservas.SuperAdmin/icons/icon-128x128.png',
-  '/Rservas.SuperAdmin/icons/icon-144x144.png',
-  '/Rservas.SuperAdmin/icons/icon-152x152.png',
-  '/Rservas.SuperAdmin/icons/icon-192x192.png',
-  '/Rservas.SuperAdmin/icons/icon-384x384.png',
-  '/Rservas.SuperAdmin/icons/icon-512x512.png'
+  'index.html',
+  'login.html',
+  'supabase-config.js',
+  'super-admin.js',
+  'manifest.json',
+  'icons/icon-72x72.png',
+  'icons/icon-96x96.png',
+  'icons/icon-128x128.png',
+  'icons/icon-144x144.png',
+  'icons/icon-152x152.png',
+  'icons/icon-192x192.png',
+  'icons/icon-384x384.png',
+  'icons/icon-512x512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -46,12 +45,12 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = event.request.url;
   
-  // IGNORAR chrome-extension://
+  // Ignorar extensiones de Chrome
   if (url.startsWith('chrome-extension://')) {
     return;
   }
   
-  // Ignorar Supabase y APIs externas
+  // Ignorar APIs externas
   if (url.includes('supabase.co')) return;
   if (url.includes('ntfy.sh')) return;
   if (url.includes('tailwindcss.com')) return;
@@ -68,6 +67,8 @@ self.addEventListener('fetch', event => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });

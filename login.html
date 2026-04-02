@@ -6,16 +6,21 @@
     <title>Super Admin Login - Rservas</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .backdrop-blur-lg {
+            backdrop-filter: blur(16px);
+        }
+    </style>
 </head>
 <body class="bg-gradient-to-br from-pink-900 to-purple-900 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white/10 backdrop-blur-lg rounded-xl p-8 max-w-md w-full border border-pink-500/30">
+    <div class="bg-white/10 backdrop-blur-lg rounded-xl p-8 max-w-md w-full border border-pink-500/30 shadow-2xl">
         <div class="text-center mb-8">
-            <div class="text-5xl mb-3">👑</div>
+            <div class="text-6xl mb-3">👑</div>
             <h1 class="text-3xl font-bold text-white">Super Admin</h1>
             <p class="text-pink-300 mt-2">Panel de control Rservas</p>
         </div>
 
-        <div id="mensaje" class="mb-4 text-sm text-center hidden"></div>
+        <div id="mensajeCargando" class="mb-4 text-sm text-center text-pink-300 hidden"></div>
         
         <form id="loginForm" class="space-y-6">
             <div>
@@ -43,20 +48,20 @@
 
     <script src="supabase-config.js"></script>
     <script>
+        const ADMIN_EMAIL = "rservasroma@gmail.com";
+        
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value.trim();
             const errorMsg = document.getElementById('errorMsg');
-            const mensaje = document.getElementById('mensaje');
+            const mensajeCargando = document.getElementById('mensajeCargando');
             
             errorMsg.classList.add('hidden');
-            mensaje.classList.add('hidden');
             
-            mensaje.textContent = 'Verificando acceso...';
-            mensaje.classList.remove('hidden');
-            mensaje.classList.add('text-pink-300');
+            mensajeCargando.textContent = '🔐 Verificando acceso...';
+            mensajeCargando.classList.remove('hidden');
             
             try {
                 const { data, error } = await window.supabase.auth.signInWithPassword({
@@ -66,20 +71,28 @@
 
                 if (error) throw error;
 
-                // Verificar que sea el super admin (cambia este email por el tuyo)
-                if (email !== 'rservasroma@gmail.com') {
+                // Verificar que sea el super admin
+                if (email !== ADMIN_EMAIL) {
                     await window.supabase.auth.signOut();
                     throw new Error('No tienes permisos de super administrador');
                 }
 
+                if (!data.user) throw new Error('Usuario no encontrado');
+
                 console.log('✅ Login exitoso');
-                mensaje.classList.add('hidden');
-                window.location.href = 'index.html';
+                mensajeCargando.textContent = '✅ Redirigiendo...';
+                
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 500);
                 
             } catch (error) {
                 errorMsg.textContent = error.message || 'Error al iniciar sesión';
                 errorMsg.classList.remove('hidden');
-                mensaje.classList.add('hidden');
+                mensajeCargando.classList.add('hidden');
+                
+                // Limpiar campos si hay error
+                document.getElementById('password').value = '';
             }
         });
     </script>

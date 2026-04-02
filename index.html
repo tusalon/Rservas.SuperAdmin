@@ -6,21 +6,42 @@
     <title>Super Admin - Rservas</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#7c3aed">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .menu-transition {
+            transition: all 0.2s ease;
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
-    <div id="app"></div>
+    <div id="panel-header"></div>
+    <div id="lista-negocios"></div>
+    
     <script src="supabase-config.js"></script>
     <script src="super-admin.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').then(reg => {
-                console.log('✅ SW registrado');
-            }).catch(err => console.log('❌ SW error:', err));
+                console.log('✅ Service Worker registrado');
+            }).catch(err => {
+                console.log('❌ Error SW:', err);
+            });
         }
     </script>
 </body>
