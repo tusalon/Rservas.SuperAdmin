@@ -276,9 +276,7 @@ function buscarNegocio(termino) {
 }
 
 function limpiarBusqueda() {
-    const buscador = document.getElementById('buscador');
-    if (buscador) buscador.value = '';
-    filtroBusqueda = '';
+    filtroBusqueda = "";
     aplicarFiltros();
 }
 
@@ -347,10 +345,9 @@ function renderTabla(negocios) {
                     <input type="text" 
                            id="buscador" 
                            placeholder="🔍 Buscar por nombre o teléfono..." 
-                           class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-base"
+                           class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-base"
                            oninput="buscarNegocio(this.value)"
                            autocomplete="off">
-                    ${filtroBusqueda ? `<button onclick="limpiarBusqueda()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">✖️</button>` : ''}
                 </div>
                 <p class="text-xs text-gray-400 mt-1">💡 Busca por nombre o cualquier parte del teléfono</p>
             </div>
