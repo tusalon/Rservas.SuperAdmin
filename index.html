@@ -2,26 +2,61 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
     <title>Super Admin - Rservas</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#7c3aed">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Rservas Admin">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <style>
-        .modal {
-            transition: all 0.3s ease;
+        /* Mejoras para móvil */
+        * {
+            -webkit-tap-highlight-color: transparent;
         }
+        
         .fade-in {
             animation: fadeIn 0.2s ease-in;
         }
+        
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .btn-action {
-            transition: all 0.2s ease;
+        
+        /* Scroll suave */
+        html {
+            scroll-behavior: smooth;
         }
-        .btn-action:hover {
-            transform: scale(1.02);
+        
+        /* Mejora para inputs en móvil (evita zoom automático) */
+        input, select, textarea, button {
+            font-size: 16px;
+        }
+        
+        /* Tarjetas táctiles */
+        .card-touch {
+            transition: transform 0.1s ease;
+        }
+        .card-touch:active {
+            transform: scale(0.99);
+        }
+        
+        /* Botones táctiles más grandes en móvil */
+        @media (max-width: 640px) {
+            button, .btn-mobile {
+                min-height: 44px;
+            }
         }
     </style>
 </head>
@@ -31,5 +66,16 @@
 
     <script src="supabase-config.js"></script>
     <script src="super-admin.js"></script>
+    
+    <!-- Registrar Service Worker (solo para instalación PWA) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => {
+                    console.log('Service Worker error:', err);
+                });
+            });
+        }
+    </script>
 </body>
 </html>
