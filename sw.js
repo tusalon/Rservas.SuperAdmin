@@ -5,7 +5,15 @@ const urlsToCache = [
   '/Rservas.SuperAdmin/login.html',
   '/Rservas.SuperAdmin/supabase-config.js',
   '/Rservas.SuperAdmin/super-admin.js',
-  '/Rservas.SuperAdmin/manifest.json'
+  '/Rservas.SuperAdmin/manifest.json',
+  '/Rservas.SuperAdmin/icons/icon-72x72.png',
+  '/Rservas.SuperAdmin/icons/icon-96x96.png',
+  '/Rservas.SuperAdmin/icons/icon-128x128.png',
+  '/Rservas.SuperAdmin/icons/icon-144x144.png',
+  '/Rservas.SuperAdmin/icons/icon-152x152.png',
+  '/Rservas.SuperAdmin/icons/icon-192x192.png',
+  '/Rservas.SuperAdmin/icons/icon-384x384.png',
+  '/Rservas.SuperAdmin/icons/icon-512x512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -36,7 +44,6 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Ignorar Supabase y APIs externas
   if (event.request.url.includes('supabase.co')) return;
   if (event.request.url.includes('ntfy.sh')) return;
   if (event.request.url.includes('tailwindcss.com')) return;
