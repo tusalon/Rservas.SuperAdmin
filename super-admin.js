@@ -533,33 +533,16 @@ function renderListaNegocios(negocios) {
             }
         }
         
-        const negocioId = String(n.id).replace(/[^a-zA-Z0-9]/g, '');
-        
         html += `
-            <div class="bg-white rounded-lg shadow border-l-4 ${ec.color} p-4 fade-in">
+            <div class="bg-white rounded-lg shadow border-l-4 ${ec.color} p-4 fade-in flex flex-col">
                 <div class="flex flex-col md:flex-row justify-between items-start gap-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2 flex-wrap">
                             <h2 class="font-bold text-lg">🏢 ${nombreMostrado}</h2>
-                            <span class="px-2 py-1 rounded-full text-xs ${ec.bg}">${ec.text}</span>
+                            <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
                         </div>
                         <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
-                    </div>
-                    <div class="relative">
-    <button onclick="window.toggleMenu('menu-${negocioId}')" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-sm transition">⚙️ Acciones ▼</button>
-    <div id="menu-${negocioId}" class="hidden absolute left-0 md:left-auto md:right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-50 border menu-transition z-[100]">
-                            <div class="py-1">
-                                ${n.estado_suscripcion === 'trial' ? `<button onclick="window.activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 text-sm">✅ Activar negocio</button>` : ''}
-                                ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 text-sm">▶️ Reactivar negocio</button>` : ''}
-                                ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-orange-50 text-orange-600 text-sm">⏸️ Suspender negocio</button>` : ''}
-                                <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm">📅 Extender fecha de pago</button>
-                                <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm">💬 Enviar WhatsApp</button>
-                                <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm">🔔 Enviar notificación</button>
-                                <hr class="my-1">
-                                <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 text-sm">🗑️ Dar de baja (irreversible)</button>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 
@@ -582,9 +565,20 @@ function renderListaNegocios(negocios) {
                     </div>
                 </div>
                 
-                <div class="flex flex-col md:flex-row justify-between text-xs mt-3 text-gray-500 gap-2">
+                <div class="flex flex-col md:flex-row justify-between text-xs mt-3 text-gray-500 gap-2 pb-3 border-b">
                     <div>💳 Último pago: ${fechaUltimo}</div>
                     <div class="${diasRestantes <= 3 && n.estado_suscripcion === 'activa' ? 'text-red-600 font-bold' : ''}">⏰ Próximo pago: ${fechaProximo} ${diasRestantes > 0 ? `(faltan ${diasRestantes} días)` : diasRestantes < 0 ? '(VENCIDO)' : ''}</div>
+                </div>
+
+                <div class="mt-3 flex flex-wrap gap-2">
+                    ${n.estado_suscripcion === 'trial' ? `<button onclick="window.activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">✅ Activar</button>` : ''}
+                    ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">▶️ Reactivar</button>` : ''}
+                    ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
+                    
+                    <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
+                    <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 WhatsApp</button>
+                    <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🔔 Notificar</button>
+                    <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🗑️ Baja</button>
                 </div>
             </div>
         `;
@@ -599,22 +593,6 @@ function renderListaNegocios(negocios) {
 }
 
 // ==================== FUNCIONES DE UI ====================
-function toggleMenu(menuId) {
-    const menu = document.getElementById(menuId);
-    if (menu) {
-        menu.classList.toggle('hidden');
-    }
-}
-
-// Cerrar menús al hacer clic fuera
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('[onclick*="toggleMenu"]') && !e.target.closest('[id^="menu-"]')) {
-        document.querySelectorAll('[id^="menu-"]').forEach(menu => {
-            menu.classList.add('hidden');
-        });
-    }
-});
-
 async function logout() {
     if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
         try {
@@ -640,7 +618,6 @@ window.enviarWhatsApp = enviarWhatsApp;
 window.notificarNegocio = notificarNegocio;
 window.notificarATodos = notificarATodos;
 window.exportarCSV = exportarCSV;
-window.toggleMenu = toggleMenu;
 window.logout = logout;
 
 // ==================== INICIALIZACIÓN ====================
