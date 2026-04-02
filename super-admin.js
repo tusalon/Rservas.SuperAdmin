@@ -448,8 +448,8 @@ function renderListaNegocios(negocios) {
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
                     </div>
                     <div class="relative">
-                        <button onclick="toggleMenu('menu-${n.id}')" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-sm">⚙️ Acciones ▼</button>
-                        <div id="menu-${n.id}" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-10 border overflow-hidden">
+    <button onclick="toggleMenu('menu-${n.id}')" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-sm">⚙️ Acciones ▼</button>
+    <div id="menu-${n.id}" class="hidden fixed right-4 mt-2 w-[280px] bg-white rounded-lg shadow-xl z-50 border overflow-hidden" style="max-width: calc(100vw - 32px);">
                             <div class="py-1">
                                 ${n.estado_suscripcion === 'trial' ? `<button onclick="activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 text-sm">✅ Activar (pasar a pago)</button>` : ''}
                                 ${n.estado_suscripcion === 'suspendida' ? `<button onclick="reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 text-sm">▶️ Reactivar</button>` : ''}

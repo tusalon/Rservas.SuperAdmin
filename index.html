@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
     <title>Super Admin - Rservas</title>
     
-    <!-- PWA Meta Tags -->
-    <link rel="manifest" href="manifest.json">
+    <!-- PWA Meta Tags - Rutas corregidas -->
+    <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#7c3aed">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Rservas Admin">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -41,6 +41,21 @@
                 min-height: 44px;
             }
         }
+        /* Fix para menú en móvil - no se sale de la pantalla */
+        .dropdown-menu {
+            position: fixed !important;
+            right: 16px !important;
+            left: auto !important;
+            width: 280px !important;
+            max-width: calc(100vw - 32px) !important;
+        }
+        @media (max-width: 640px) {
+            .dropdown-menu {
+                width: calc(100vw - 32px) !important;
+                right: 16px !important;
+                left: 16px !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -55,11 +70,14 @@
     <script src="supabase-config.js"></script>
     <script src="super-admin.js"></script>
     
+    <!-- Registrar Service Worker - Ruta corregida -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => {
-                    console.log('Service Worker error:', err);
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('✅ Service Worker registrado:', reg.scope);
+                }).catch(err => {
+                    console.log('❌ Service Worker error:', err);
                 });
             });
         }
