@@ -190,7 +190,7 @@ async function extenderFechaPago(id, nombreNegocio) {
 }
 
 function enviarWhatsApp(telefono, nombreNegocio) {
-    if (!telefono || telefono === 'No registrado') {
+    if (!telefono || telefono === 'No registrado' || telefono === '') {
         alert(`❌ El negocio "${nombreNegocio}" no tiene número de teléfono registrado.`);
         return;
     }
@@ -320,13 +320,17 @@ async function exportarCSV() {
 
 // ==================== FILTROS Y BÚSQUEDA ====================
 function buscarNegocio(termino) {
+    // Guardar el término de búsqueda
     filtroBusqueda = termino.toLowerCase().trim();
+    // Aplicar filtros
     aplicarFiltros();
 }
 
 function limpiarBusqueda() {
     const buscador = document.getElementById('buscador');
-    if (buscador) buscador.value = '';
+    if (buscador) {
+        buscador.value = '';
+    }
     filtroBusqueda = '';
     aplicarFiltros();
 }
@@ -339,10 +343,12 @@ function filtrarPorEstado(estado) {
 function aplicarFiltros() {
     let resultados = [...negociosData];
     
+    // Filtrar por estado
     if (filtroActual !== 'todos') {
         resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
     }
     
+    // Filtrar por búsqueda (nombre o teléfono)
     if (filtroBusqueda !== '') {
         resultados = resultados.filter(n => {
             const nombreMatch = n.nombre?.toLowerCase().includes(filtroBusqueda);
@@ -395,7 +401,7 @@ function renderTabla(negocios) {
                            id="buscador" 
                            placeholder="🔍 Buscar por nombre o teléfono... (ej: 6204)" 
                            class="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-base"
-                           onkeyup="buscarNegocio(this.value)"
+                           oninput="buscarNegocio(this.value)"
                            autocomplete="off">
                     ${filtroBusqueda !== '' ? `
                         <button onclick="limpiarBusqueda()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
@@ -450,7 +456,7 @@ function renderTabla(negocios) {
         let telefonoMostrado = n.telefono || 'No registrado';
         
         if (filtroBusqueda !== '') {
-            const regex = new RegExp(`(${filtroBusqueda})`, 'gi');
+            const regex = new RegExp(`(${filtroBusqueda.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
             nombreMostrado = nombreMostrado.replace(regex, '<mark class="bg-yellow-200 px-0.5 rounded">$1</mark>');
             if (n.telefono) {
                 telefonoMostrado = n.telefono.replace(regex, '<mark class="bg-yellow-200 px-0.5 rounded">$1</mark>');
@@ -526,12 +532,17 @@ function renderTabla(negocios) {
 
 function toggleMenu(menuId) {
     const menu = document.getElementById(menuId);
-    if (menu) menu.classList.toggle('hidden');
+    if (menu) {
+        menu.classList.toggle('hidden');
+    }
 }
 
+// Cerrar menús al hacer click fuera
 document.addEventListener('click', function(e) {
     if (!e.target.closest('[onclick*="toggleMenu"]') && !e.target.closest('[id^="menu-"]')) {
-        document.querySelectorAll('[id^="menu-"]').forEach(menu => menu.classList.add('hidden'));
+        document.querySelectorAll('[id^="menu-"]').forEach(menu => {
+            menu.classList.add('hidden');
+        });
     }
 });
 
@@ -542,7 +553,7 @@ window.logout = async function() {
     }
 };
 
-// Exponer funciones
+// Exponer funciones globalmente
 window.filtrarPorEstado = filtrarPorEstado;
 window.buscarNegocio = buscarNegocio;
 window.limpiarBusqueda = limpiarBusqueda;
@@ -560,10 +571,14 @@ window.logout = logout;
 
 // Inicializar
 async function init() {
-    document.getElementById('app').innerHTML = `<div class="text-center p-8">Cargando...</div>`;
+    document.getElementById('app').innerHTML = `<div class="text-center p-8">Cargando panel de administración...</div>`;
     const acceso = await verificarAcceso();
     if (!acceso) return;
     const negocios = await cargarNegocios();
+    if (negocios.length === 0) {
+        document.getElementById('app').innerHTML = `<div class="text-center p-8 text-red-600">Error al cargar negocios. Verifica conexión.</div>`;
+        return;
+    }
     negociosData = negocios;
     renderTabla(negocios);
 }
