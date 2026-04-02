@@ -23,7 +23,7 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME).then(cache => {
       console.log('✅ Cache creado');
       return cache.addAll(urlsToCache);
-    }).catch(error => console.error('❌ Error:', error))
+    }).catch(error => console.error('❌ Error al cachear:', error))
   );
 });
 
@@ -44,10 +44,18 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.url.includes('supabase.co')) return;
-  if (event.request.url.includes('ntfy.sh')) return;
-  if (event.request.url.includes('tailwindcss.com')) return;
-  if (event.request.url.includes('cdn.')) return;
+  const url = event.request.url;
+  
+  // IGNORAR chrome-extension://
+  if (url.startsWith('chrome-extension://')) {
+    return;
+  }
+  
+  // Ignorar Supabase y APIs externas
+  if (url.includes('supabase.co')) return;
+  if (url.includes('ntfy.sh')) return;
+  if (url.includes('tailwindcss.com')) return;
+  if (url.includes('cdn.')) return;
 
   event.respondWith(
     fetch(event.request)
