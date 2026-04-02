@@ -1,22 +1,22 @@
 // sw.js - Service Worker para PWA Rservas Admin
 const CACHE_NAME = 'rservas-admin-v1';
 
-// Archivos a cachear (solo los esenciales para que funcione)
+// Archivos a cachear
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/login.html',
-  '/supabase-config.js',
-  '/super-admin.js'
+  '/Rservas.SuperAdmin/',
+  '/Rservas.SuperAdmin/index.html',
+  '/Rservas.SuperAdmin/login.html',
+  '/Rservas.SuperAdmin/supabase-config.js',
+  '/Rservas.SuperAdmin/super-admin.js'
 ];
 
-// Instalación: cachear archivos esenciales
+// Instalación
 self.addEventListener('install', event => {
   console.log('Service Worker instalado');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Archivos cacheados');
+        console.log('Cache abierto');
         return cache.addAll(urlsToCache);
       })
       .catch(err => console.log('Error al cachear:', err))
@@ -24,7 +24,7 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Activación: limpiar caches viejos
+// Activación
 self.addEventListener('activate', event => {
   console.log('Service Worker activado');
   event.waitUntil(
@@ -42,11 +42,16 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
-// Fetch: estrategia "Network First" (primero internet, si falla usa cache)
+// Fetch - IGNORAR chrome-extension://
 self.addEventListener('fetch', event => {
   const url = event.request.url;
   
-  // No cachear peticiones a Supabase (API)
+  // IGNORAR extensiones de Chrome
+  if (url.startsWith('chrome-extension://')) {
+    return;
+  }
+  
+  // No cachear peticiones a Supabase
   if (url.includes('supabase.co')) {
     event.respondWith(fetch(event.request));
     return;
@@ -64,12 +69,11 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Para archivos locales: primero intentar red, si falla usar cache
+  // Para archivos locales
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Si la respuesta es válida, la clonamos y guardamos en cache
-        if (response && response.status === 200) {
+        if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME)
             .then(cache => {
@@ -79,21 +83,7 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => {
-        // Si falla la red, buscar en cache
-        return caches.match(event.request)
-          .then(response => {
-            if (response) {
-              return response;
-            }
-            // Si es una navegación y no está en cache, mostrar index.html
-            if (event.request.mode === 'navigate') {
-              return caches.match('/index.html');
-            }
-            return new Response('Recurso no disponible', {
-              status: 404,
-              statusText: 'Not Found'
-            });
-          });
+        return caches.match(event.request);
       })
   );
 });

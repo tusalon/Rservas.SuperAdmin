@@ -328,7 +328,7 @@ function actualizarBotonesFiltro() {
     });
 }
 
-// ==================== RENDERIZADO DEL HEADER (solo una vez) ====================
+// ==================== RENDERIZADO DEL HEADER ====================
 function renderHeader() {
     const stats = calcularEstadisticas(negociosData);
     const totalPorEstado = {
@@ -395,7 +395,7 @@ function renderHeader() {
     document.getElementById('panel-header').innerHTML = headerHtml;
 }
 
-// ==================== RENDERIZADO DE LISTA (solo los negocios) ====================
+// ==================== RENDERIZADO DE LISTA ====================
 function renderListaNegocios(negocios) {
     let html = `<div class="max-w-7xl mx-auto p-4 md:p-6 pt-0">`;
     
@@ -447,9 +447,9 @@ function renderListaNegocios(negocios) {
                         <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
                     </div>
-                    <div class="relative">
-    <button onclick="toggleMenu('menu-${n.id}')" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-sm">⚙️ Acciones ▼</button>
-    <div id="menu-${n.id}" class="hidden fixed right-4 mt-2 w-[280px] bg-white rounded-lg shadow-xl z-50 border overflow-hidden" style="max-width: calc(100vw - 32px);">
+                    <div class="relative inline-block">
+                        <button onclick="toggleMenu('menu-${n.id}')" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-sm">⚙️ Acciones ▼</button>
+                        <div id="menu-${n.id}" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-50 border overflow-hidden origin-top-right">
                             <div class="py-1">
                                 ${n.estado_suscripcion === 'trial' ? `<button onclick="activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 text-sm">✅ Activar (pasar a pago)</button>` : ''}
                                 ${n.estado_suscripcion === 'suspendida' ? `<button onclick="reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="block w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 text-sm">▶️ Reactivar</button>` : ''}
@@ -486,12 +486,17 @@ function renderListaNegocios(negocios) {
 // ==================== FUNCIONES DE UI ====================
 function toggleMenu(menuId) {
     const menu = document.getElementById(menuId);
-    if (menu) menu.classList.toggle('hidden');
+    if (menu) {
+        menu.classList.toggle('hidden');
+    }
 }
 
+// Cerrar menús al hacer clic fuera
 document.addEventListener('click', function(e) {
     if (!e.target.closest('[onclick*="toggleMenu"]') && !e.target.closest('[id^="menu-"]')) {
-        document.querySelectorAll('[id^="menu-"]').forEach(menu => menu.classList.add('hidden'));
+        document.querySelectorAll('[id^="menu-"]').forEach(menu => {
+            menu.classList.add('hidden');
+        });
     }
 });
 
