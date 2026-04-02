@@ -272,20 +272,23 @@ async function exportarCSV() {
 // ==================== FILTROS ====================
 function buscarNegocio(termino) {
     filtroBusqueda = termino.toLowerCase().trim();
-    aplicarFiltros();
+    actualizarListaNegocios();
 }
 
 function limpiarBusqueda() {
+    const buscador = document.getElementById('buscador');
+    if (buscador) buscador.value = '';
     filtroBusqueda = "";
-    aplicarFiltros();
+    actualizarListaNegocios();
 }
 
 function filtrarPorEstado(estado) {
     filtroActual = estado;
-    aplicarFiltros();
+    actualizarListaNegocios();
+    actualizarBotonesFiltro();
 }
 
-function aplicarFiltros() {
+function actualizarListaNegocios() {
     let resultados = [...negociosData];
     
     if (filtroActual !== 'todos') {
@@ -299,12 +302,35 @@ function aplicarFiltros() {
         );
     }
     
-    renderTabla(resultados);
+    renderListaNegocios(resultados);
 }
 
-// ==================== RENDERIZADO ====================
-function renderTabla(negocios) {
-    const stats = calcularEstadisticas(negocios);
+function actualizarBotonesFiltro() {
+    const botones = ['todos', 'activa', 'suspendida', 'trial'];
+    botones.forEach(estado => {
+        const btn = document.getElementById(`filtro-${estado}`);
+        if (btn) {
+            if (filtroActual === estado) {
+                btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100');
+                btn.classList.remove('text-green-700', 'text-red-700', 'text-yellow-700');
+                if (estado === 'todos') btn.classList.add('bg-gray-800', 'text-white');
+                if (estado === 'activa') btn.classList.add('bg-green-600', 'text-white');
+                if (estado === 'suspendida') btn.classList.add('bg-red-600', 'text-white');
+                if (estado === 'trial') btn.classList.add('bg-yellow-600', 'text-white');
+            } else {
+                btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'text-white');
+                if (estado === 'todos') btn.classList.add('bg-gray-200', 'text-gray-700');
+                if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
+                if (estado === 'suspendida') btn.classList.add('bg-red-100', 'text-red-700');
+                if (estado === 'trial') btn.classList.add('bg-yellow-100', 'text-yellow-700');
+            }
+        }
+    });
+}
+
+// ==================== RENDERIZADO DEL HEADER (solo una vez) ====================
+function renderHeader() {
+    const stats = calcularEstadisticas(negociosData);
     const totalPorEstado = {
         todos: negociosData.length,
         activa: negociosData.filter(n => n.estado_suscripcion === 'activa').length,
@@ -312,7 +338,7 @@ function renderTabla(negocios) {
         trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length
     };
     
-    let html = `
+    const headerHtml = `
         <div class="max-w-7xl mx-auto p-4 md:p-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <div>
@@ -358,16 +384,26 @@ function renderTabla(negocios) {
             </div>
             
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
-                <button onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm ${filtroActual === 'todos' ? 'bg-gray-800 text-white' : 'bg-gray-200'}">📋 Todos (${totalPorEstado.todos})</button>
-                <button onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm ${filtroActual === 'activa' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700'}">🟢 Activos (${totalPorEstado.activa})</button>
-                <button onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm ${filtroActual === 'suspendida' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'}">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
-                <button onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm ${filtroActual === 'trial' ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-700'}">🟡 Prueba (${totalPorEstado.trial})</button>
+                <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
+                <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">🟢 Activos (${totalPorEstado.activa})</button>
+                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
+                <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">🟡 Prueba (${totalPorEstado.trial})</button>
             </div>
-            
-            ${filtroBusqueda ? `<div class="mb-3 text-sm text-gray-500">🔍 Resultados: "${filtroBusqueda}" (${negocios.length})</div>` : ''}
-            
-            <div class="grid gap-4">
+        </div>
     `;
+    
+    document.getElementById('panel-header').innerHTML = headerHtml;
+}
+
+// ==================== RENDERIZADO DE LISTA (solo los negocios) ====================
+function renderListaNegocios(negocios) {
+    let html = `<div class="max-w-7xl mx-auto p-4 md:p-6 pt-0">`;
+    
+    if (filtroBusqueda) {
+        html += `<div class="mb-3 text-sm text-gray-500">🔍 Resultados: "${filtroBusqueda}" (${negocios.length} encontrados)</div>`;
+    }
+    
+    html += `<div class="grid gap-4">`;
     
     if (negocios.length === 0) {
         html += `<div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
@@ -401,7 +437,7 @@ function renderTabla(negocios) {
         }
         
         html += `
-            <div class="bg-white rounded-lg shadow border-l-4 ${ec.color} p-4">
+            <div class="bg-white rounded-lg shadow border-l-4 ${ec.color} p-4 fade-in">
                 <div class="flex flex-col md:flex-row justify-between items-start gap-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2 flex-wrap">
@@ -444,9 +480,10 @@ function renderTabla(negocios) {
     });
     
     html += `</div></div>`;
-    document.getElementById('app').innerHTML = html;
+    document.getElementById('lista-negocios').innerHTML = html;
 }
 
+// ==================== FUNCIONES DE UI ====================
 function toggleMenu(menuId) {
     const menu = document.getElementById(menuId);
     if (menu) menu.classList.toggle('hidden');
@@ -465,7 +502,7 @@ window.logout = async function() {
     }
 };
 
-// Exponer funciones
+// Exponer funciones globales
 window.buscarNegocio = buscarNegocio;
 window.limpiarBusqueda = limpiarBusqueda;
 window.filtrarPorEstado = filtrarPorEstado;
@@ -481,18 +518,23 @@ window.exportarCSV = exportarCSV;
 window.toggleMenu = toggleMenu;
 window.logout = logout;
 
-// Inicializar
+// ==================== INICIALIZACIÓN ====================
 async function init() {
-    document.getElementById('app').innerHTML = `<div class="text-center p-8">Cargando...</div>`;
+    document.getElementById('panel-header').innerHTML = `<div class="text-center p-8">Cargando panel...</div>`;
+    document.getElementById('lista-negocios').innerHTML = `<div class="text-center p-8">Cargando negocios...</div>`;
+    
     const acceso = await verificarAcceso();
     if (!acceso) return;
+    
     const negocios = await cargarNegocios();
     if (negocios.length === 0) {
-        document.getElementById('app').innerHTML = `<div class="text-center p-8 text-red-600">Error al cargar negocios</div>`;
+        document.getElementById('panel-header').innerHTML = `<div class="text-center p-8 text-red-600">Error al cargar negocios</div>`;
         return;
     }
+    
     negociosData = negocios;
-    renderTabla(negocios);
+    renderHeader();
+    renderListaNegocios(negocios);
 }
 
 init();
