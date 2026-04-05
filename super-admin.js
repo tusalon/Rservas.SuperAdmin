@@ -1,3 +1,4 @@
+// super-admin.js
 // ==================== CONFIGURACIÓN ====================
 const PRECIO_MENSUAL = 1000;
 const DIAS_POR_DEFECTO = 15;
@@ -8,6 +9,9 @@ const ADMIN_EMAIL = "rservasroma@gmail.com";
 let filtroActual = "todos";
 let filtroBusqueda = "";
 let negociosData = [];
+let ordenActual = "reservas"; // 'reservas' o 'fecha'
+let reservasDiarias = 0;
+let reservasDiariasData = [];
 
 // ==================== VERIFICAR ACCESO ====================
 async function verificarAcceso() {
@@ -26,6 +30,31 @@ async function verificarAcceso() {
         console.error('Error verificando acceso:', error);
         window.location.href = 'login.html';
         return false;
+    }
+}
+
+// ==================== OBTENER RESERVAS DIARIAS ====================
+async function obtenerReservasDiarias() {
+    try {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const hoyISO = hoy.toISOString();
+        
+        const { data, error } = await window.supabase
+            .from('reservas')
+            .select('fecha_hora, negocio_id')
+            .gte('fecha_hora', hoyISO);
+
+        if (error) {
+            console.warn('Error al obtener reservas diarias:', error);
+            return 0;
+        }
+
+        reservasDiariasData = data || [];
+        return reservasDiariasData.length;
+    } catch (error) {
+        console.error('Error obteniendo reservas diarias:', error);
+        return 0;
     }
 }
 
@@ -64,6 +93,12 @@ async function cargarNegocios() {
     }
 }
 
+// ==================== OBTENER RESERVAS DIARIAS POR NEGOCIO ====================
+function getReservasDiariasPorNegocio(negocioId) {
+    if (!negocioId) return 0;
+    return reservasDiariasData.filter(r => r.negocio_id === negocioId).length;
+}
+
 function mostrarErrorConexion() {
     const listaDiv = document.getElementById('lista-negocios');
     if (listaDiv) {
@@ -99,6 +134,56 @@ function calcularFechaMasDias(dias) {
     const fecha = new Date();
     fecha.setDate(fecha.getDate() + dias);
     return fecha.toISOString().split('T')[0];
+}
+
+// ==================== ORDENAMIENTO ====================
+function ordenarNegocios(negocios, orden) {
+    const negociosOrdenados = [...negocios];
+    
+    if (orden === 'reservas') {
+        negociosOrdenados.sort((a, b) => {
+            const reservasA = Number(a.reservas_mes) || 0;
+            const reservasB = Number(b.reservas_mes) || 0;
+            if (reservasB !== reservasA) {
+                return reservasB - reservasA;
+            }
+            // Si hay empate, ordenar por nombre
+            return (a.nombre || '').localeCompare(b.nombre || '');
+        });
+    } else {
+        negociosOrdenados.sort((a, b) => {
+            const fechaA = a.fecha_registro ? new Date(a.fecha_registro) : new Date(0);
+            const fechaB = b.fecha_registro ? new Date(b.fecha_registro) : new Date(0);
+            return fechaB - fechaA;
+        });
+    }
+    
+    return negociosOrdenados;
+}
+
+function cambiarOrden(orden) {
+    ordenActual = orden;
+    actualizarListaNegocios();
+    actualizarBotonOrden();
+}
+
+function actualizarBotonOrden() {
+    const btnReservas = document.getElementById('order-reservas');
+    const btnFecha = document.getElementById('order-fecha');
+    
+    if (btnReservas && btnFecha) {
+        if (ordenActual === 'reservas') {
+            btnReservas.classList.add('active', 'bg-purple-600', 'text-white');
+            btnReservas.classList.remove('bg-gray-200', 'text-gray-700');
+            btnFecha.classList.remove('active', 'bg-purple-600', 'text-white');
+            btnFecha.classList.add('bg-gray-200', 'text-gray-700');
+        } else {
+            btnFecha.classList.add('active', 'bg-purple-600', 'text-white');
+            btnFecha.classList.remove('bg-gray-200', 'text-gray-700');
+            btnReservas.classList.remove('active', 'bg-purple-600', 'text-white');
+            btnReservas.classList.add('bg-gray-200', 'text-gray-700');
+        }
+    }
 }
 
 // ==================== ACCIONES ====================
@@ -312,7 +397,7 @@ async function exportarCSV() {
         );
     }
     
-    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Estado', 'Reservas Mes', 'Profesionales', 'Días Activo', 'Próximo Pago', 'Monto', 'Días para Renovar'];
+    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Estado', 'Reservas Mes', 'Profesionales', 'Días Activo', 'Próximo Pago', 'Monto', 'Días para Renovar', 'Reservas Hoy'];
     const rows = resultados.map(n => [
         n.id, 
         n.nombre || '', 
@@ -324,7 +409,8 @@ async function exportarCSV() {
         n.dias_activo || 0, 
         n.proximo_pago || '', 
         n.monto_ultimo_pago || PRECIO_MENSUAL,
-        n.dias_para_renovar || 0
+        n.dias_para_renovar || 0,
+        getReservasDiariasPorNegocio(n.id)
     ]);
     
     const csvContent = [headers, ...rows].map(row => 
@@ -377,6 +463,9 @@ function actualizarListaNegocios() {
         );
     }
     
+    // Aplicar ordenamiento
+    resultados = ordenarNegocios(resultados, ordenActual);
+    
     renderListaNegocios(resultados);
 }
 
@@ -413,6 +502,14 @@ function renderHeader() {
         trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length
     };
     
+    // Obtener la fecha actual formateada
+    const fechaActual = new Date().toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
     const headerHtml = `
         <div class="max-w-7xl mx-auto p-4 md:p-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -424,6 +521,31 @@ function renderHeader() {
                     <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">📥 Exportar CSV</button>
                     <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Actualizar</button>
                     <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">🚪 Cerrar Sesión</button>
+                </div>
+            </div>
+            
+            <!-- CONTADOR DE RESERVAS DIARIAS DESTACADO -->
+            <div class="mb-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl shadow-lg overflow-hidden">
+                <div class="px-6 py-5">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="text-4xl md:text-5xl">📅</div>
+                            <div>
+                                <p class="text-purple-100 text-sm">RESERVAS REALIZADAS HOY</p>
+                                <p class="text-white text-xs opacity-80">${fechaActual}</p>
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            <div class="reservas-diarias-number text-5xl md:text-7xl font-bold text-white drop-shadow-lg">
+                                ${reservasDiarias}
+                            </div>
+                            <p class="text-purple-100 text-sm mt-1">reservas en total</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-purple-100 text-xs">📊 Última actualización</p>
+                            <p class="text-white text-sm">${new Date().toLocaleTimeString()}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -471,6 +593,13 @@ function renderHeader() {
                 <p class="text-xs text-gray-400 mt-1">💡 Busca por nombre o cualquier parte del teléfono</p>
             </div>
             
+            <!-- BOTONES DE ORDENAMIENTO -->
+            <div class="mb-4 flex flex-wrap gap-3 items-center">
+                <span class="text-sm text-gray-500 font-medium">Ordenar por:</span>
+                <button id="order-reservas" onclick="cambiarOrden('reservas')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-purple-600 text-white">🏆 Más reservas</button>
+                <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">📅 Más recientes</button>
+            </div>
+            
             <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
                 <button onclick="notificarATodos()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">📢 Notificar a TODOS</button>
                 <span class="text-xs text-gray-500">💰 ${PRECIO_MENSUAL} CUP/mes | ⏱️ +${DIAS_POR_DEFECTO} días</span>
@@ -513,6 +642,7 @@ function renderListaNegocios(negocios) {
         const fechaProximo = n.proximo_pago ? new Date(n.proximo_pago).toLocaleDateString() : 'No definido';
         const fechaUltimo = n.fecha_ultimo_pago ? new Date(n.fecha_ultimo_pago).toLocaleDateString() : 'No registrado';
         const diasRestantes = n.dias_para_renovar || 0;
+        const reservasHoy = getReservasDiariasPorNegocio(n.id);
         
         const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
@@ -533,23 +663,28 @@ function renderListaNegocios(negocios) {
             }
         }
         
+        // Mostrar un indicador visual si el negocio tiene muchas reservas
+        const esTopReservas = ordenActual === 'reservas' && negocios.indexOf(n) < 3 && Number(n.reservas_mes) > 0;
+        const medallaTop = esTopReservas ? (negocios.indexOf(n) === 0 ? '🥇 ' : (negocios.indexOf(n) === 1 ? '🥈 ' : '🥉 ')) : '';
+        
         html += `
             <div class="bg-white rounded-lg shadow border-l-4 ${ec.color} p-4 fade-in flex flex-col">
                 <div class="flex flex-col md:flex-row justify-between items-start gap-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2 flex-wrap">
-                            <h2 class="font-bold text-lg">🏢 ${nombreMostrado}</h2>
+                            <h2 class="font-bold text-lg">${medallaTop}🏢 ${nombreMostrado}</h2>
                             <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
+                            ${reservasHoy > 0 ? `<span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">📅 +${reservasHoy} hoy</span>` : ''}
                         </div>
                         <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
                     </div>
                 </div>
                 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm border-t pt-3">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 text-sm border-t pt-3">
                     <div class="text-center">
                         <div class="text-gray-500 text-xs">📊 Reservas (mes)</div>
-                        <div class="font-bold text-lg">${n.reservas_mes || 0}</div>
+                        <div class="font-bold text-lg ${Number(n.reservas_mes) > 0 ? 'text-purple-600' : 'text-gray-400'}">${n.reservas_mes || 0}</div>
                     </div>
                     <div class="text-center">
                         <div class="text-gray-500 text-xs">👥 Profesionales</div>
@@ -562,6 +697,10 @@ function renderListaNegocios(negocios) {
                     <div class="text-center">
                         <div class="text-gray-500 text-xs">💰 Monto mensual</div>
                         <div class="font-bold text-lg">${n.monto_ultimo_pago || PRECIO_MENSUAL}</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-gray-500 text-xs">🔥 Reservas hoy</div>
+                        <div class="font-bold text-lg ${reservasHoy > 0 ? 'text-orange-500' : 'text-gray-400'}">${reservasHoy}</div>
                     </div>
                 </div>
                 
@@ -619,6 +758,7 @@ window.notificarNegocio = notificarNegocio;
 window.notificarATodos = notificarATodos;
 window.exportarCSV = exportarCSV;
 window.logout = logout;
+window.cambiarOrden = cambiarOrden;
 
 // ==================== INICIALIZACIÓN ====================
 async function init() {
@@ -638,6 +778,9 @@ async function init() {
     // Verificar acceso
     const acceso = await verificarAcceso();
     if (!acceso) return;
+    
+    // Obtener reservas diarias
+    reservasDiarias = await obtenerReservasDiarias();
     
     // Cargar negocios
     const negocios = await cargarNegocios();
@@ -659,8 +802,12 @@ async function init() {
     
     negociosData = negocios;
     renderHeader();
-    renderListaNegocios(negocios);
+    
+    // Ordenar por reservas por defecto
+    const negociosOrdenados = ordenarNegocios(negocios, 'reservas');
+    renderListaNegocios(negociosOrdenados);
     actualizarBotonesFiltro();
+    actualizarBotonOrden();
 }
 
 // Iniciar cuando el DOM esté listo
