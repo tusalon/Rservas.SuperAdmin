@@ -308,6 +308,7 @@ async function extenderFechaPago(id, nombreNegocio) {
     }
 }
 
+// FUNCIÓN WHATSAPP ORIGINAL (con mensaje de soporte)
 function enviarWhatsApp(telefono, nombreNegocio) {
     if (!telefono || telefono === 'No registrado' || telefono === '') {
         alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
@@ -323,6 +324,23 @@ function enviarWhatsApp(telefono, nombreNegocio) {
     window.open(`https://wa.me/${numeroLimpio}?text=${mensajeCodificado}`, '_blank');
 }
 
+// NUEVA FUNCIÓN WHATSAPP SIMPLE (solo "Hola")
+function enviarWhatsAppSimple(telefono, nombreNegocio) {
+    if (!telefono || telefono === 'No registrado' || telefono === '') {
+        alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
+        return;
+    }
+    
+    let numeroLimpio = telefono.replace(/\D/g, '');
+    if (!numeroLimpio.startsWith('53') && numeroLimpio.length === 8) {
+        numeroLimpio = '53' + numeroLimpio;
+    }
+    
+    const mensajeCodificado = encodeURIComponent("Hola");
+    window.open(`https://wa.me/${numeroLimpio}?text=${mensajeCodificado}`, '_blank');
+}
+
+// FUNCIÓN NOTIFICAR ORIGINAL (con prompt para mensaje personalizado)
 async function notificarNegocio(negocio) {
     const mensaje = prompt(`📢 Mensaje para ${negocio.nombre}:`, WHATSAPP_MENSAJE);
     if (!mensaje) return;
@@ -342,6 +360,36 @@ async function notificarNegocio(negocio) {
         
         if (response.ok) {
             alert('✅ Notificación enviada correctamente');
+        } else {
+            alert('❌ Error al enviar notificación');
+        }
+    } catch (error) {
+        alert('❌ Error de red: ' + error.message);
+    }
+}
+
+// NUEVA FUNCIÓN NOTIFICACIÓN DE VENCIMIENTO
+async function notificarVencimiento(negocio) {
+    const numeroCuenta = prompt(`💰 AVISO DE VENCIMIENTO para ${negocio.nombre}\n\nIngresa el número de cuenta o método de pago para incluir en el mensaje:\n(ej: 1234-5678-9012, Transfermóvil, Enzona, etc.)`);
+    
+    if (!numeroCuenta) return;
+    
+    const mensaje = `Hola, mañana vence la suscripción mensual. Por favor realizar el pago a esta cuenta: ${numeroCuenta}`;
+    const tema = negocio.ntfy_topic || NTFY_TOPIC_GLOBAL;
+    
+    try {
+        const response = await fetch(`https://ntfy.sh/${tema}`, {
+            method: 'POST',
+            body: mensaje,
+            headers: {
+                'Title': `⚠️ Vencimiento de suscripción - ${negocio.nombre}`,
+                'Priority': 'high',
+                'Tags': 'warning,calendar'
+            }
+        });
+        
+        if (response.ok) {
+            alert(`✅ Notificación de vencimiento enviada a ${negocio.nombre}\n📨 Mensaje: ${mensaje}`);
         } else {
             alert('❌ Error al enviar notificación');
         }
@@ -715,8 +763,18 @@ function renderListaNegocios(negocios) {
                     ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
                     
                     <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
-                    <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 WhatsApp</button>
+                    
+                    <!-- BOTÓN WHATSAPP ORIGINAL (con mensaje de soporte) -->
+                    <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
+                    
+                    <!-- NUEVO BOTÓN WHATSAPP SIMPLE (solo "Hola") -->
+                    <button onclick="window.enviarWhatsAppSimple('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💚 WhatsApp Hola</button>
+                    
                     <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🔔 Notificar</button>
+                    
+                    <!-- NUEVO BOTÓN NOTIFICACIÓN VENCIMIENTO -->
+                    <button onclick="window.notificarVencimiento(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⚠️ Avisar Vencimiento</button>
+                    
                     <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🗑️ Baja</button>
                 </div>
             </div>
@@ -754,7 +812,9 @@ window.reactivarNegocio = reactivarNegocio;
 window.inactivarNegocio = inactivarNegocio;
 window.extenderFechaPago = extenderFechaPago;
 window.enviarWhatsApp = enviarWhatsApp;
+window.enviarWhatsAppSimple = enviarWhatsAppSimple;  // NUEVA
 window.notificarNegocio = notificarNegocio;
+window.notificarVencimiento = notificarVencimiento;  // NUEVA
 window.notificarATodos = notificarATodos;
 window.exportarCSV = exportarCSV;
 window.logout = logout;
