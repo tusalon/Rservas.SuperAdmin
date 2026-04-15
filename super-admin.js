@@ -864,7 +864,7 @@ async function notificarTurnosManana() {
         }
 
         let enviados = 0, errores = 0;
-        let temasUsados = new Set(); // Para depuración
+        let temasUsados = []; 
 
         const turnosPorNegocio = turnos.reduce((acc, t) => {
             if (!acc[t.negocio_id]) acc[t.negocio_id] = [];
@@ -889,25 +889,16 @@ async function notificarTurnosManana() {
                     mensaje += `- ${horaLimpia} cliente ${cli}, ${serv} prof: ${prof}\n`;
                 });
 
-                // --- LÓGICA DE DIRECCIONAMIENTO CORREGIDA ---
-                // Priorizamos el topic del negocio. Si no existe, usamos el global.
-                let temaOriginal = neg.ntfy_topic && neg.ntfy_topic.trim() !== '' 
-                                   ? neg.ntfy_topic 
-                                   : NTFY_TOPIC_GLOBAL;
-                
-                // Limpieza amigable: convertimos espacios en guiones (estándar de NTFY)
-                let temaLimpio = temaOriginal.trim()
-                                 .replace(/\s+/g, '-') 
-                                 .replace(/[^a-zA-Z0-9-_]/g, '');
-
-                temasUsados.add(temaLimpio);
+                // Extraemos el topic EXACTO de tu base de datos (ej: "yuly_nails")
+                const temaLimpio = String(neg.ntfy_topic || NTFY_TOPIC_GLOBAL).trim();
+                temasUsados.push(temaLimpio);
 
                 try {
                     const resp = await fetch(`https://ntfy.sh/${temaLimpio}`, {
                         method: 'POST',
                         body: mensaje,
                         headers: { 
-                            'Title': 'Turnos para Manana',
+                            'Title': 'Turnos de manana',
                             'Priority': 'default',
                             'Tags': 'calendar,bell'
                         }
@@ -927,9 +918,9 @@ async function notificarTurnosManana() {
             }
         }
 
-        // Resumen detallado para confirmar que no se fueron todos al mismo sitio
-        const listaTemas = Array.from(temasUsados).join(', ');
-        alert(`✅ Proceso finalizado:\n📨 Enviados: ${enviados}\n❌ Errores: ${errores}\n\n📡 Canales contactados:\n${listaTemas}`);
+        // Creamos una lista única para el reporte
+        const canalesUnicos = [...new Set(temasUsados)];
+        alert(`✅ Proceso finalizado:\n📨 Enviados: ${enviados}\n❌ Errores: ${errores}\n\n📡 Canales contactados (${canalesUnicos.length}):\n${canalesUnicos.join(', ')}`);
         
     } catch (error) {
         alert('❌ Error de consulta: ' + error.message);
