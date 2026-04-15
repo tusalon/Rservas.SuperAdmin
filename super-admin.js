@@ -864,6 +864,7 @@ async function notificarTurnosManana() {
         }
 
         let enviados = 0, errores = 0;
+        let temasUsados = new Set(); // Para depuración
 
         const turnosPorNegocio = turnos.reduce((acc, t) => {
             if (!acc[t.negocio_id]) acc[t.negocio_id] = [];
@@ -888,10 +889,21 @@ async function notificarTurnosManana() {
                     mensaje += `- ${horaLimpia} cliente ${cli}, ${serv} prof: ${prof}\n`;
                 });
 
-                const tema = neg.ntfy_topic || NTFY_TOPIC_GLOBAL;
+                // --- LÓGICA DE DIRECCIONAMIENTO CORREGIDA ---
+                // Priorizamos el topic del negocio. Si no existe, usamos el global.
+                let temaOriginal = neg.ntfy_topic && neg.ntfy_topic.trim() !== '' 
+                                   ? neg.ntfy_topic 
+                                   : NTFY_TOPIC_GLOBAL;
+                
+                // Limpieza amigable: convertimos espacios en guiones (estándar de NTFY)
+                let temaLimpio = temaOriginal.trim()
+                                 .replace(/\s+/g, '-') 
+                                 .replace(/[^a-zA-Z0-9-_]/g, '');
+
+                temasUsados.add(temaLimpio);
 
                 try {
-                    const resp = await fetch(`https://ntfy.sh/${tema}`, {
+                    const resp = await fetch(`https://ntfy.sh/${temaLimpio}`, {
                         method: 'POST',
                         body: mensaje,
                         headers: { 
@@ -905,19 +917,20 @@ async function notificarTurnosManana() {
                         enviados++;
                     } else {
                         errores++;
-                        console.error(`Error NTFY [${neg.nombre}]: Status ${resp.status}`);
                     }
                     
                     await new Promise(r => setTimeout(r, 600)); 
                     
                 } catch(e) { 
                     errores++; 
-                    console.error(`Fallo de conexión enviando a [${neg.nombre}]:`, e);
                 }
             }
         }
 
-        alert(`✅ Proceso finalizado:\n📨 Notificaciones enviadas: ${enviados}\n❌ Errores: ${errores}`);
+        // Resumen detallado para confirmar que no se fueron todos al mismo sitio
+        const listaTemas = Array.from(temasUsados).join(', ');
+        alert(`✅ Proceso finalizado:\n📨 Enviados: ${enviados}\n❌ Errores: ${errores}\n\n📡 Canales contactados:\n${listaTemas}`);
+        
     } catch (error) {
         alert('❌ Error de consulta: ' + error.message);
     }
