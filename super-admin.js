@@ -12,6 +12,7 @@ let negociosData = [];
 let ordenActual = "reservas"; // 'reservas' o 'fecha'
 let reservasDiarias = 0;
 let reservasDiariasData = [];
+let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 
 // ==================== VERIFICAR ACCESO ====================
 async function verificarAcceso() {
@@ -40,7 +41,7 @@ async function obtenerReservasDiarias() {
         hoy.setHours(0, 0, 0, 0);
         const hoyISO = hoy.toISOString();
         
-        // Usamos 'created_at' como pediste, para contar las reservas SACADAS hoy
+        // Ahora filtramos por 'created_at' para contar los que se SACARON hoy
         const { data, error } = await window.supabase
             .from('reservas')
             .select('created_at, negocio_id')
@@ -501,7 +502,12 @@ function filtrarPorEstado(estado) {
 function actualizarListaNegocios() {
     let resultados = [...negociosData];
     
-    if (filtroActual !== 'todos') {
+    // Si el filtro es pendiente, buscamos en nuestra memoria local
+    if (filtroActual === 'pendiente') {
+        resultados = resultados.filter(n => pendientesLocal.includes(n.id));
+    } 
+    // Para los demás estados, seguimos buscando en la base de datos
+    else if (filtroActual !== 'todos') {
         resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
     }
     
@@ -553,7 +559,7 @@ function renderHeader() {
         activa: negociosData.filter(n => n.estado_suscripcion === 'activa').length,
         suspendida: negociosData.filter(n => n.estado_suscripcion === 'suspendida').length,
         trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length,
-        pendiente: negociosData.filter(n => n.estado_suscripcion === 'pendiente').length,
+        pendiente: negociosData.filter(n => pendientesLocal.includes(n.id)).length,
         inactiva: negociosData.filter(n => n.estado_suscripcion === 'inactiva').length
     };
     
@@ -579,14 +585,13 @@ function renderHeader() {
                 </div>
             </div>
             
-            <!-- CONTADOR DE RESERVAS DIARIAS DESTACADO -->
             <div class="mb-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl shadow-lg overflow-hidden">
                 <div class="px-6 py-5">
                     <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                         <div class="flex items-center gap-3">
                             <div class="text-4xl md:text-5xl">📅</div>
                             <div>
-                                <p class="text-purple-100 text-sm">RESERVAS REALIZADAS HOY</p>
+                                <p class="text-purple-100 text-sm">RESERVAS SACADAS HOY</p>
                                 <p class="text-white text-xs opacity-80">${fechaActual}</p>
                             </div>
                         </div>
@@ -648,15 +653,14 @@ function renderHeader() {
                 <p class="text-xs text-gray-400 mt-1">💡 Busca por nombre o cualquier parte del teléfono</p>
             </div>
             
-            <!-- BOTONES DE ORDENAMIENTO -->
             <div class="mb-4 flex flex-wrap gap-3 items-center">
                 <span class="text-sm text-gray-500 font-medium">Ordenar por:</span>
                 <button id="order-reservas" onclick="cambiarOrden('reservas')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-purple-600 text-white">🏆 Más reservas</button>
                 <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">📅 Más recientes</button>
             </div>
             
-           <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
-                <div class="flex gap-2">
+            <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
+                <div class="flex gap-2 flex-wrap">
                     <button onclick="notificarATodos()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">📢 Notificar a TODOS</button>
                     <button onclick="notificarTurnosManana()" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">🔔 Turnos Mañana</button>
                 </div>
@@ -666,17 +670,10 @@ function renderHeader() {
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
                 <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
                 <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">🟢 Activos (${totalPorEstado.activa})</button>
+                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
                 <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">🟡 Prueba (${totalPorEstado.trial})</button>
                 <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
-                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
                 <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
-            </div>
-            
-            <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
-                <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
-                <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">🟢 Activos (${totalPorEstado.activa})</button>
-                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
-                <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">🟡 Prueba (${totalPorEstado.trial})</button>
             </div>
         </div>
     `;
@@ -710,8 +707,9 @@ function renderListaNegocios(negocios) {
         const fechaUltimo = n.fecha_ultimo_pago ? new Date(n.fecha_ultimo_pago).toLocaleDateString() : 'No registrado';
         const diasRestantes = n.dias_para_renovar || 0;
         const reservasHoy = getReservasDiariasPorNegocio(n.id);
+        const esPendiente = pendientesLocal.includes(n.id);
         
-      const estadoConfig = {
+        const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
             'suspendida': { color: 'border-red-500', text: '🔴 Suspendido', bg: 'bg-red-100 text-red-700' },
             'trial': { color: 'border-yellow-500', text: '🟡 Prueba', bg: 'bg-yellow-100 text-yellow-700' },
@@ -778,22 +776,21 @@ function renderListaNegocios(negocios) {
                 </div>
 
                 <div class="mt-3 flex flex-wrap gap-2">
-                    ${n.estado_suscripcion !== 'inactiva' && n.estado_suscripcion !== 'pendiente' ? `<button onclick="window.marcarPendiente('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">👀 Pendiente</button>` : ''}
+                    <button onclick="window.togglePendiente('${n.id}')" class="${esPendiente ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
+                        ${esPendiente ? '✔️ Quitar Pendiente' : '👀 Marcar Pendiente'}
+                    </button>
                     ${n.estado_suscripcion === 'trial' ? `<button onclick="window.activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">✅ Activar</button>` : ''}
                     ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">▶️ Reactivar</button>` : ''}
                     ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
                     
                     <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
                     
-                    <!-- BOTÓN WHATSAPP ORIGINAL (con mensaje de soporte) -->
                     <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
                     
-                    <!-- NUEVO BOTÓN WHATSAPP SIMPLE (solo "Hola") -->
                     <button onclick="window.enviarWhatsAppSimple('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💚 WhatsApp Hola</button>
                     
                     <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🔔 Notificar</button>
                     
-                    <!-- NUEVO BOTÓN NOTIFICACIÓN VENCIMIENTO -->
                     <button onclick="window.notificarVencimiento(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⚠️ Avisar Vencimiento</button>
                     
                     <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🗑️ Baja</button>
@@ -822,23 +819,20 @@ async function logout() {
         }
     }
 }
-// ==================== NUEVAS FUNCIONES DE NEGOCIO ====================
 
-async function marcarPendiente(id, nombreNegocio) {
-    if (!confirm(`👀 ¿Marcar a ${nombreNegocio} como PENDIENTE para revisión?`)) return;
+// ==================== FUNCIONES NUEVAS ====================
+function togglePendiente(id) {
+    const index = pendientesLocal.indexOf(id);
     
-    try {
-        const { error } = await window.supabase
-            .from('suscripciones')
-            .update({ estado: 'pendiente' })
-            .eq('negocio_id', id);
-        
-        if (error) throw error;
-        alert('✅ Negocio movido a Pendientes');
-        location.reload();
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
+    if (index > -1) {
+        pendientesLocal.splice(index, 1);
+    } else {
+        pendientesLocal.push(id);
     }
+    
+    localStorage.setItem('pendientes_admin', JSON.stringify(pendientesLocal));
+    actualizarListaNegocios();
+    renderHeader();
 }
 
 async function notificarTurnosManana() {
@@ -851,16 +845,12 @@ async function notificarTurnosManana() {
 
     if (!confirm(`🔔 ¿Buscar turnos de MAÑANA y notificar a los ${elegibles.length} negocios activos/prueba?`)) return;
 
-    // Calcular la fecha exacta de mañana en formato YYYY-MM-DD para la base de datos
     const mananaObj = new Date();
     mananaObj.setDate(mananaObj.getDate() + 1);
     const mananaSQL = mananaObj.toISOString().split('T')[0];
-    
-    // Fecha para el texto amigable ("15 de abril")
     const fechaTexto = mananaObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
 
     try {
-        // Usamos las columnas exactas de tu tabla reservas
         const { data: turnos, error } = await window.supabase
             .from('reservas')
             .select('negocio_id, cliente_nombre, servicio, profesional_nombre, hora_inicio')
@@ -875,7 +865,6 @@ async function notificarTurnosManana() {
 
         let enviados = 0, errores = 0;
 
-        // Agrupar turnos por negocio
         const turnosPorNegocio = turnos.reduce((acc, t) => {
             if (!acc[t.negocio_id]) acc[t.negocio_id] = [];
             acc[t.negocio_id].push(t);
@@ -886,13 +875,11 @@ async function notificarTurnosManana() {
             const turnosNegocio = turnosPorNegocio[neg.id];
             
             if (turnosNegocio && turnosNegocio.length > 0) {
-                // Ordenar por hora
                 turnosNegocio.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
 
-                let mensaje = `Hola ${neg.nombre}, mañana día ${fechaTexto} tienes turnos:\n\n`;
+                let mensaje = `🔔 Hola ${neg.nombre}, mañana día ${fechaTexto} tienes turnos:\n\n`;
                 
                 turnosNegocio.forEach(t => {
-                    // Limpiar la hora de HH:MM:SS a HH:MM
                     const horaLimpia = t.hora_inicio ? t.hora_inicio.substring(0, 5) : 'Sin hora';
                     const cli = t.cliente_nombre || 'Cliente';
                     const serv = t.servicio || 'Servicio';
@@ -908,14 +895,25 @@ async function notificarTurnosManana() {
                         method: 'POST',
                         body: mensaje,
                         headers: { 
-                            'Title': `🔔 Turnos para Mañana`,
+                            'Title': 'Turnos para Manana',
                             'Priority': 'default',
                             'Tags': 'calendar,bell'
                         }
                     });
-                    if (resp.ok) enviados++; else errores++;
-                    await new Promise(r => setTimeout(r, 400)); // Retraso para no saturar NTFY
-                } catch(e) { errores++; }
+                    
+                    if (resp.ok) {
+                        enviados++;
+                    } else {
+                        errores++;
+                        console.error(`Error NTFY [${neg.nombre}]: Status ${resp.status}`);
+                    }
+                    
+                    await new Promise(r => setTimeout(r, 600)); 
+                    
+                } catch(e) { 
+                    errores++; 
+                    console.error(`Fallo de conexión enviando a [${neg.nombre}]:`, e);
+                }
             }
         }
 
@@ -924,9 +922,8 @@ async function notificarTurnosManana() {
         alert('❌ Error de consulta: ' + error.message);
     }
 }
+
 // Exponer funciones globales
-window.marcarPendiente = marcarPendiente;
-window.notificarTurnosManana = notificarTurnosManana;
 window.buscarNegocio = buscarNegocio;
 window.limpiarBusqueda = limpiarBusqueda;
 window.filtrarPorEstado = filtrarPorEstado;
@@ -936,13 +933,15 @@ window.reactivarNegocio = reactivarNegocio;
 window.inactivarNegocio = inactivarNegocio;
 window.extenderFechaPago = extenderFechaPago;
 window.enviarWhatsApp = enviarWhatsApp;
-window.enviarWhatsAppSimple = enviarWhatsAppSimple;  // NUEVA
+window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
 window.notificarNegocio = notificarNegocio;
-window.notificarVencimiento = notificarVencimiento;  // NUEVA
+window.notificarVencimiento = notificarVencimiento;  
 window.notificarATodos = notificarATodos;
 window.exportarCSV = exportarCSV;
 window.logout = logout;
 window.cambiarOrden = cambiarOrden;
+window.togglePendiente = togglePendiente;
+window.notificarTurnosManana = notificarTurnosManana;
 
 // ==================== INICIALIZACIÓN ====================
 async function init() {
