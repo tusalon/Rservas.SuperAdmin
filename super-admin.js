@@ -40,10 +40,11 @@ async function obtenerReservasDiarias() {
         hoy.setHours(0, 0, 0, 0);
         const hoyISO = hoy.toISOString();
         
+        // Usamos 'created_at' como pediste, para contar las reservas SACADAS hoy
         const { data, error } = await window.supabase
             .from('reservas')
-            .select('fecha_hora, negocio_id')
-            .gte('fecha_hora', hoyISO);
+            .select('created_at, negocio_id')
+            .gte('created_at', hoyISO);
 
         if (error) {
             console.warn('Error al obtener reservas diarias:', error);
@@ -518,23 +519,27 @@ function actualizarListaNegocios() {
 }
 
 function actualizarBotonesFiltro() {
-    const estados = ['todos', 'activa', 'suspendida', 'trial'];
+    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva'];
     estados.forEach(estado => {
         const btn = document.getElementById(`filtro-${estado}`);
         if (btn) {
+            btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-purple-600', 'bg-gray-600', 'text-white');
+            btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100', 'bg-purple-100', 'bg-gray-100', 'text-gray-700', 'text-green-700', 'text-red-700', 'text-yellow-700', 'text-purple-700');
+            
             if (filtroActual === estado) {
-                btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100');
-                btn.classList.remove('text-gray-700', 'text-green-700', 'text-red-700', 'text-yellow-700');
                 if (estado === 'todos') btn.classList.add('bg-gray-800', 'text-white');
                 if (estado === 'activa') btn.classList.add('bg-green-600', 'text-white');
                 if (estado === 'suspendida') btn.classList.add('bg-red-600', 'text-white');
                 if (estado === 'trial') btn.classList.add('bg-yellow-600', 'text-white');
+                if (estado === 'pendiente') btn.classList.add('bg-purple-600', 'text-white');
+                if (estado === 'inactiva') btn.classList.add('bg-gray-600', 'text-white');
             } else {
-                btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'text-white');
                 if (estado === 'todos') btn.classList.add('bg-gray-200', 'text-gray-700');
                 if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
                 if (estado === 'suspendida') btn.classList.add('bg-red-100', 'text-red-700');
                 if (estado === 'trial') btn.classList.add('bg-yellow-100', 'text-yellow-700');
+                if (estado === 'pendiente') btn.classList.add('bg-purple-100', 'text-purple-700');
+                if (estado === 'inactiva') btn.classList.add('bg-gray-100', 'text-gray-700');
             }
         }
     });
@@ -547,7 +552,9 @@ function renderHeader() {
         todos: negociosData.length,
         activa: negociosData.filter(n => n.estado_suscripcion === 'activa').length,
         suspendida: negociosData.filter(n => n.estado_suscripcion === 'suspendida').length,
-        trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length
+        trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length,
+        pendiente: negociosData.filter(n => n.estado_suscripcion === 'pendiente').length,
+        inactiva: negociosData.filter(n => n.estado_suscripcion === 'inactiva').length
     };
     
     // Obtener la fecha actual formateada
@@ -648,9 +655,21 @@ function renderHeader() {
                 <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">📅 Más recientes</button>
             </div>
             
-            <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
-                <button onclick="notificarATodos()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">📢 Notificar a TODOS</button>
+           <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
+                <div class="flex gap-2">
+                    <button onclick="notificarATodos()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">📢 Notificar a TODOS</button>
+                    <button onclick="notificarTurnosManana()" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">🔔 Turnos Mañana</button>
+                </div>
                 <span class="text-xs text-gray-500">💰 ${PRECIO_MENSUAL} CUP/mes | ⏱️ +${DIAS_POR_DEFECTO} días</span>
+            </div>
+            
+            <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
+                <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
+                <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">🟢 Activos (${totalPorEstado.activa})</button>
+                <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">🟡 Prueba (${totalPorEstado.trial})</button>
+                <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
+                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
+                <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
             </div>
             
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
@@ -692,11 +711,12 @@ function renderListaNegocios(negocios) {
         const diasRestantes = n.dias_para_renovar || 0;
         const reservasHoy = getReservasDiariasPorNegocio(n.id);
         
-        const estadoConfig = {
+      const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
             'suspendida': { color: 'border-red-500', text: '🔴 Suspendido', bg: 'bg-red-100 text-red-700' },
             'trial': { color: 'border-yellow-500', text: '🟡 Prueba', bg: 'bg-yellow-100 text-yellow-700' },
-            'inactiva': { color: 'border-gray-500', text: '⚫ Inactivo', bg: 'bg-gray-100 text-gray-700' }
+            'inactiva': { color: 'border-gray-500', text: '⚫ Inactivo', bg: 'bg-gray-100 text-gray-700' },
+            'pendiente': { color: 'border-purple-500', text: '👀 Pendiente', bg: 'bg-purple-100 text-purple-700' }
         };
         const ec = estadoConfig[n.estado_suscripcion] || estadoConfig.activa;
         
@@ -758,6 +778,7 @@ function renderListaNegocios(negocios) {
                 </div>
 
                 <div class="mt-3 flex flex-wrap gap-2">
+                    ${n.estado_suscripcion !== 'inactiva' && n.estado_suscripcion !== 'pendiente' ? `<button onclick="window.marcarPendiente('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">👀 Pendiente</button>` : ''}
                     ${n.estado_suscripcion === 'trial' ? `<button onclick="window.activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">✅ Activar</button>` : ''}
                     ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">▶️ Reactivar</button>` : ''}
                     ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
@@ -801,8 +822,111 @@ async function logout() {
         }
     }
 }
+// ==================== NUEVAS FUNCIONES DE NEGOCIO ====================
 
+async function marcarPendiente(id, nombreNegocio) {
+    if (!confirm(`👀 ¿Marcar a ${nombreNegocio} como PENDIENTE para revisión?`)) return;
+    
+    try {
+        const { error } = await window.supabase
+            .from('suscripciones')
+            .update({ estado: 'pendiente' })
+            .eq('negocio_id', id);
+        
+        if (error) throw error;
+        alert('✅ Negocio movido a Pendientes');
+        location.reload();
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+async function notificarTurnosManana() {
+    const elegibles = negociosData.filter(n => n.estado_suscripcion === 'activa' || n.estado_suscripcion === 'trial');
+    
+    if (elegibles.length === 0) {
+        alert('⚠️ No hay negocios activos o en prueba.');
+        return;
+    }
+
+    if (!confirm(`🔔 ¿Buscar turnos de MAÑANA y notificar a los ${elegibles.length} negocios activos/prueba?`)) return;
+
+    // Calcular la fecha exacta de mañana en formato YYYY-MM-DD para la base de datos
+    const mananaObj = new Date();
+    mananaObj.setDate(mananaObj.getDate() + 1);
+    const mananaSQL = mananaObj.toISOString().split('T')[0];
+    
+    // Fecha para el texto amigable ("15 de abril")
+    const fechaTexto = mananaObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+
+    try {
+        // Usamos las columnas exactas de tu tabla reservas
+        const { data: turnos, error } = await window.supabase
+            .from('reservas')
+            .select('negocio_id, cliente_nombre, servicio, profesional_nombre, hora_inicio')
+            .eq('fecha', mananaSQL);
+
+        if (error) throw error;
+
+        if (!turnos || turnos.length === 0) {
+            alert('No hay turnos registrados para el día de mañana.');
+            return;
+        }
+
+        let enviados = 0, errores = 0;
+
+        // Agrupar turnos por negocio
+        const turnosPorNegocio = turnos.reduce((acc, t) => {
+            if (!acc[t.negocio_id]) acc[t.negocio_id] = [];
+            acc[t.negocio_id].push(t);
+            return acc;
+        }, {});
+
+        for (const neg of elegibles) {
+            const turnosNegocio = turnosPorNegocio[neg.id];
+            
+            if (turnosNegocio && turnosNegocio.length > 0) {
+                // Ordenar por hora
+                turnosNegocio.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+
+                let mensaje = `Hola ${neg.nombre}, mañana día ${fechaTexto} tienes turnos:\n\n`;
+                
+                turnosNegocio.forEach(t => {
+                    // Limpiar la hora de HH:MM:SS a HH:MM
+                    const horaLimpia = t.hora_inicio ? t.hora_inicio.substring(0, 5) : 'Sin hora';
+                    const cli = t.cliente_nombre || 'Cliente';
+                    const serv = t.servicio || 'Servicio';
+                    const prof = t.profesional_nombre || 'No asignado';
+
+                    mensaje += `- ${horaLimpia} cliente ${cli}, ${serv} prof: ${prof}\n`;
+                });
+
+                const tema = neg.ntfy_topic || NTFY_TOPIC_GLOBAL;
+
+                try {
+                    const resp = await fetch(`https://ntfy.sh/${tema}`, {
+                        method: 'POST',
+                        body: mensaje,
+                        headers: { 
+                            'Title': `🔔 Turnos para Mañana`,
+                            'Priority': 'default',
+                            'Tags': 'calendar,bell'
+                        }
+                    });
+                    if (resp.ok) enviados++; else errores++;
+                    await new Promise(r => setTimeout(r, 400)); // Retraso para no saturar NTFY
+                } catch(e) { errores++; }
+            }
+        }
+
+        alert(`✅ Proceso finalizado:\n📨 Notificaciones enviadas: ${enviados}\n❌ Errores: ${errores}`);
+    } catch (error) {
+        alert('❌ Error de consulta: ' + error.message);
+    }
+}
 // Exponer funciones globales
+window.marcarPendiente = marcarPendiente;
+window.notificarTurnosManana = notificarTurnosManana;
 window.buscarNegocio = buscarNegocio;
 window.limpiarBusqueda = limpiarBusqueda;
 window.filtrarPorEstado = filtrarPorEstado;
