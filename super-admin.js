@@ -835,6 +835,17 @@ function togglePendiente(id) {
     renderHeader();
 }
 
+// Helper copiado de Node.js para formatear la hora a 12h
+function formatTo12Hour(timeStr) {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    let hour12 = hours % 12;
+    hour12 = hour12 === 0 ? 12 : hour12;
+    return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+}
+
+// Nueva función unificada con la lógica perfecta de Node.js
 async function notificarTurnosManana() {
     const elegibles = negociosData.filter(n => n.estado_suscripcion === 'activa' || n.estado_suscripcion === 'trial');
     
@@ -843,87 +854,160 @@ async function notificarTurnosManana() {
         return;
     }
 
-    if (!confirm(`🔔 ¿Buscar turnos de MAÑANA y notificar a los ${elegibles.length} negocios activos/prueba?`)) return;
+    if (!confirm(`🔔 ¿Notificar turnos de MAÑANA a los ${elegibles.length} negocios activos/prueba?\n\n(Se aplicará la misma lógica y formato de mensaje que usa el servidor automático)`)) return;
 
-    const mananaObj = new Date();
-    mananaObj.setDate(mananaObj.getDate() + 1);
-    const mananaSQL = mananaObj.toISOString().split('T')[0];
-    const fechaTexto = mananaObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+    // Calcular fecha igual que en Node.js
+    const manana = new Date();
+    manana.setDate(manana.getDate() + 1);
+    manana.setHours(0, 0, 0, 0);
+    
+    const year = manana.getFullYear();
+    const month = String(manana.getMonth() + 1).padStart(2, '0');
+    const day = String(manana.getDate()).padStart(2, '0');
+    const mananaSQL = `${year}-${month}-${day}`;
+    
+    const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const diaSemana = dias[manana.getDay()];
+    const diaSemanaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
+    const fechaLegible = `${diaSemanaCapitalizado} ${manana.getDate()} de ${meses[manana.getMonth()]} de ${year}`;
 
     try {
+        // 1. EL TRUCO MAESTRO: Ir a la tabla original 'negocios' a buscar los topics
+        // Esto esquiva el problema de que 'vista_negocios_admin' no los tenga
+        const { data: topicsData } = await window.supabase
+            .from('negocios')
+            .select('id, ntfy_topic');
+            
+        const mapTopics = {};
+        if (topicsData) {
+            topicsData.forEach(n => mapTopics[n.id] = n.ntfy_topic);
+        }
+
+        // 2. BUSCAR TURNOS (Filtrando solo 'Reservado' como hace Node.js)
         const { data: turnos, error } = await window.supabase
             .from('reservas')
-            .select('negocio_id, cliente_nombre, servicio, profesional_nombre, hora_inicio')
-            .eq('fecha', mananaSQL);
+            .select('negocio_id, cliente_nombre, cliente_whatsapp, servicio, profesional_nombre, hora_inicio')
+            .eq('fecha', mananaSQL)
+            .eq('estado', 'Reservado'); 
 
         if (error) throw error;
 
-        if (!turnos || turnos.length === 0) {
-            alert('No hay turnos registrados para el día de mañana.');
-            return;
-        }
-
         let enviados = 0, errores = 0;
-        let temasUsados = []; 
+        let temasUsados = new Set();
+        let negociosSinTopic = [];
 
-        const turnosPorNegocio = turnos.reduce((acc, t) => {
+        // Agrupar turnos por negocio
+        const turnosPorNegocio = (turnos || []).reduce((acc, t) => {
             if (!acc[t.negocio_id]) acc[t.negocio_id] = [];
             acc[t.negocio_id].push(t);
             return acc;
         }, {});
 
+        // 3. PROCESAR CADA NEGOCIO (Exactamente como en index.js)
         for (const neg of elegibles) {
-            const turnosNegocio = turnosPorNegocio[neg.id];
+            const turnosNegocio = turnosPorNegocio[neg.id] || [];
             
-            if (turnosNegocio && turnosNegocio.length > 0) {
+            // Buscar su topic real en el mapa que extrajimos
+            let ntfyTopic = mapTopics[neg.id]; 
+            
+            if (!ntfyTopic || ntfyTopic.trim() === '') {
+                ntfyTopic = NTFY_TOPIC_GLOBAL;
+                negociosSinTopic.push(neg.nombre);
+            } else {
+                ntfyTopic = ntfyTopic.trim();
+            }
+
+            temasUsados.add(ntfyTopic);
+
+            let tituloMensaje = "";
+            let cuerpoMensaje = "";
+
+            if (turnosNegocio.length === 0) {
+                // Mensaje de "Sin turnos" igual que Node
+                tituloMensaje = `${neg.nombre}: Sin turnos`;
+                cuerpoMensaje = `📅 *${neg.nombre}*\n📆 ${fechaLegible}\n\n✅ No hay turnos programados para mañana.\n\n💖 *${neg.nombre}*`;
+            } else {
+                // Mensaje detallado de turnos igual que Node
                 turnosNegocio.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
-
-                let mensaje = `🔔 Hola ${neg.nombre}, mañana día ${fechaTexto} tienes turnos:\n\n`;
+                tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para mañana`;
                 
-                turnosNegocio.forEach(t => {
-                    const horaLimpia = t.hora_inicio ? t.hora_inicio.substring(0, 5) : 'Sin hora';
-                    const cli = t.cliente_nombre || 'Cliente';
-                    const serv = t.servicio || 'Servicio';
-                    const prof = t.profesional_nombre || 'No asignado';
-
-                    mensaje += `- ${horaLimpia} cliente ${cli}, ${serv} prof: ${prof}\n`;
+                const porProfesional = {};
+                const porServicio = {};
+                
+                turnosNegocio.forEach(turno => {
+                    const profesional = turno.profesional_nombre || 'No asignado';
+                    const servicio = turno.servicio || 'No especificado';
+                    porProfesional[profesional] = (porProfesional[profesional] || 0) + 1;
+                    porServicio[servicio] = (porServicio[servicio] || 0) + 1;
                 });
 
-                // Extraemos el topic EXACTO de tu base de datos (ej: "yuly_nails")
-                const temaLimpio = String(neg.ntfy_topic || NTFY_TOPIC_GLOBAL).trim();
-                temasUsados.push(temaLimpio);
+                cuerpoMensaje = `🌟 *${neg.nombre}*\n📅 ${fechaLegible}\n📊 Total: ${turnosNegocio.length} turno${turnosNegocio.length !== 1 ? 's' : ''}\n━━━━━━━━━━━━━━━━━━━━━\n`;
+                
+                turnosNegocio.forEach((turno, index) => {
+                    const hora = formatTo12Hour(turno.hora_inicio);
+                    const profesional = turno.profesional_nombre || 'No asignado';
+                    const servicio = turno.servicio || '?';
+                    
+                    cuerpoMensaje += `${index + 1}. ${hora} | ${turno.cliente_nombre}\n`;
+                    cuerpoMensaje += `   💅 ${servicio} | 👩‍🎨 ${profesional}\n`;
+                    cuerpoMensaje += `   📱 ${turno.cliente_whatsapp || '---'}\n`;
+                    if (index < turnosNegocio.length - 1) cuerpoMensaje += `\n`;
+                });
 
-                try {
-                    const resp = await fetch(`https://ntfy.sh/${temaLimpio}`, {
-                        method: 'POST',
-                        body: mensaje,
-                        headers: { 
-                            'Title': 'Turnos de manana',
-                            'Priority': 'default',
-                            'Tags': 'calendar,bell'
-                        }
-                    });
-                    
-                    if (resp.ok) {
-                        enviados++;
-                    } else {
-                        errores++;
+                if (Object.keys(porProfesional).length > 0) {
+                    cuerpoMensaje += `\n━━━━━━━━━━━━━━━━━━━━━\n📊 *Por profesional:*\n`;
+                    for (const [prof, count] of Object.entries(porProfesional)) {
+                        cuerpoMensaje += `• ${prof}: ${count}\n`;
                     }
-                    
-                    await new Promise(r => setTimeout(r, 600)); 
-                    
-                } catch(e) { 
-                    errores++; 
                 }
+                
+                if (Object.keys(porServicio).length > 0) {
+                    cuerpoMensaje += `\n📊 *Por servicio:*\n`;
+                    for (const [serv, count] of Object.entries(porServicio)) {
+                        cuerpoMensaje += `• ${serv}: ${count}\n`;
+                    }
+                }
+                
+                cuerpoMensaje += `\n💖 *${neg.nombre}*`;
+            }
+
+            // Sanitización estricta de encabezados tomada de tu Node.js
+            const tituloLimpio = tituloMensaje.replace(/[^\x00-\x7F]/g, '').replace(/\s+/g, ' ').trim();
+
+            try {
+                const resp = await fetch(`https://ntfy.sh/${ntfyTopic}`, {
+                    method: 'POST',
+                    body: cuerpoMensaje,
+                    headers: { 
+                        'Title': tituloLimpio,
+                        'Priority': 'default',
+                        'Tags': 'bell'
+                    }
+                });
+                
+                if (resp.ok) enviados++; else errores++;
+                
+                // Espera de seguridad
+                await new Promise(r => setTimeout(r, 600)); 
+                
+            } catch(e) { 
+                errores++; 
             }
         }
 
-        // Creamos una lista única para el reporte
-        const canalesUnicos = [...new Set(temasUsados)];
-        alert(`✅ Proceso finalizado:\n📨 Enviados: ${enviados}\n❌ Errores: ${errores}\n\n📡 Canales contactados (${canalesUnicos.length}):\n${canalesUnicos.join(', ')}`);
+        const canalesFinales = Array.from(temasUsados);
+        let reporteFinal = `✅ Proceso finalizado:\n📨 Enviados a NTFY: ${enviados}\n❌ Errores: ${errores}\n\n📡 Canales contactados (${canalesFinales.length}):\n${canalesFinales.join(', ')}`;
+        
+        if (negociosSinTopic.length > 0) {
+            reporteFinal += `\n\n⚠️ ADVERTENCIA: ${negociosSinTopic.length} negocios no tienen canal guardado en la tabla y se enviaron a rservas-vencimientos. F12 para ver cuáles son.`;
+            console.warn("⚠️ Negocios sin ntfy_topic configurado:", negociosSinTopic);
+        }
+
+        alert(reporteFinal);
         
     } catch (error) {
-        alert('❌ Error de consulta: ' + error.message);
+        alert('❌ Error general: ' + error.message);
     }
 }
 
