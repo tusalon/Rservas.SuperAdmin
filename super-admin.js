@@ -845,8 +845,8 @@ function formatTo12Hour(timeStr) {
     return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
-// Nueva función unificada con la lógica perfecta de Node.js
 async function notificarTurnosManana() {
+    // 1. Obtener todos los activos/trial
     const elegibles = negociosData.filter(n => n.estado_suscripcion === 'activa' || n.estado_suscripcion === 'trial');
     
     if (elegibles.length === 0) {
@@ -854,9 +854,6 @@ async function notificarTurnosManana() {
         return;
     }
 
-    if (!confirm(`🔔 ¿Notificar turnos de MAÑANA a los ${elegibles.length} negocios activos/prueba?\n\n(Se aplicará la misma lógica y formato de mensaje que usa el servidor automático)`)) return;
-
-    // Calcular fecha igual que en Node.js
     const manana = new Date();
     manana.setDate(manana.getDate() + 1);
     manana.setHours(0, 0, 0, 0);
@@ -873,18 +870,7 @@ async function notificarTurnosManana() {
     const fechaLegible = `${diaSemanaCapitalizado} ${manana.getDate()} de ${meses[manana.getMonth()]} de ${year}`;
 
     try {
-        // 1. EL TRUCO MAESTRO: Ir a la tabla original 'negocios' a buscar los topics
-        // Esto esquiva el problema de que 'vista_negocios_admin' no los tenga
-        const { data: topicsData } = await window.supabase
-            .from('negocios')
-            .select('id, ntfy_topic');
-            
-        const mapTopics = {};
-        if (topicsData) {
-            topicsData.forEach(n => mapTopics[n.id] = n.ntfy_topic);
-        }
-
-        // 2. BUSCAR TURNOS (Filtrando solo 'Reservado' como hace Node.js)
+        // 2. Traer SOLO los turnos de mañana que estén "Reservados"
         const { data: turnos, error } = await window.supabase
             .from('reservas')
             .select('negocio_id, cliente_nombre, cliente_whatsapp, servicio, profesional_nombre, hora_inicio')
@@ -893,22 +879,56 @@ async function notificarTurnosManana() {
 
         if (error) throw error;
 
-        let enviados = 0, errores = 0;
-        let temasUsados = new Set();
-        let negociosSinTopic = [];
+        if (!turnos || turnos.length === 0) {
+            alert('No hay NINGÚN turno registrado para el día de mañana en todo el sistema.');
+            return;
+        }
 
-        // Agrupar turnos por negocio
-        const turnosPorNegocio = (turnos || []).reduce((acc, t) => {
+        // Agrupar los turnos por negocio_id
+        const turnosPorNegocio = turnos.reduce((acc, t) => {
             if (!acc[t.negocio_id]) acc[t.negocio_id] = [];
             acc[t.negocio_id].push(t);
             return acc;
         }, {});
 
-        // 3. PROCESAR CADA NEGOCIO (Exactamente como en index.js)
-        for (const neg of elegibles) {
-            const turnosNegocio = turnosPorNegocio[neg.id] || [];
+        // 3. EL GRAN FILTRO: Seleccionar solo negocios que tengan turnos en el objeto anterior
+        const negociosConTurnos = elegibles.filter(neg => turnosPorNegocio[neg.id] && turnosPorNegocio[neg.id].length > 0);
+
+        if (negociosConTurnos.length === 0) {
+            alert('Ninguno de los negocios activos tiene turnos para mañana.');
+            return;
+        }
+
+        if (!confirm(`🔔 ¿Notificar turnos a los ${negociosConTurnos.length} negocios que SÍ tienen reservas mañana?\n\n(Se han descartado los que tienen la agenda vacía para ahorrar tiempo)`)) return;
+
+        const btnNotificar = document.querySelector('button[onclick="notificarTurnosManana()"]');
+        const textoOriginalBtn = btnNotificar ? btnNotificar.innerHTML : '🔔 Turnos Mañana';
+        if (btnNotificar) btnNotificar.innerHTML = `⏳ Procesando 0/${negociosConTurnos.length}...`;
+
+        // 4. Buscar solo los topics de los negocios que sí tienen turnos
+        const { data: topicsData } = await window.supabase
+            .from('negocios')
+            .select('id, ntfy_topic')
+            .in('id', negociosConTurnos.map(n => n.id)); 
             
-            // Buscar su topic real en el mapa que extrajimos
+        const mapTopics = {};
+        if (topicsData) {
+            topicsData.forEach(n => mapTopics[n.id] = n.ntfy_topic);
+        }
+
+        let enviados = 0, errores = 0;
+        let temasUsados = new Set();
+        let negociosSinTopic = [];
+        let procesados = 0;
+
+        // 5. Procesar únicamente la lista limpia
+        for (const neg of negociosConTurnos) {
+            procesados++;
+            if (btnNotificar) btnNotificar.innerHTML = `⏳ Enviando ${procesados}/${negociosConTurnos.length}...`;
+
+            const turnosNegocio = turnosPorNegocio[neg.id];
+            turnosNegocio.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+            
             let ntfyTopic = mapTopics[neg.id]; 
             
             if (!ntfyTopic || ntfyTopic.trim() === '') {
@@ -920,59 +940,47 @@ async function notificarTurnosManana() {
 
             temasUsados.add(ntfyTopic);
 
-            let tituloMensaje = "";
-            let cuerpoMensaje = "";
+            const tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para mañana`;
+            
+            const porProfesional = {};
+            const porServicio = {};
+            
+            turnosNegocio.forEach(turno => {
+                const profesional = turno.profesional_nombre || 'No asignado';
+                const servicio = turno.servicio || 'No especificado';
+                porProfesional[profesional] = (porProfesional[profesional] || 0) + 1;
+                porServicio[servicio] = (porServicio[servicio] || 0) + 1;
+            });
 
-            if (turnosNegocio.length === 0) {
-                // Mensaje de "Sin turnos" igual que Node
-                tituloMensaje = `${neg.nombre}: Sin turnos`;
-                cuerpoMensaje = `📅 *${neg.nombre}*\n📆 ${fechaLegible}\n\n✅ No hay turnos programados para mañana.\n\n💖 *${neg.nombre}*`;
-            } else {
-                // Mensaje detallado de turnos igual que Node
-                turnosNegocio.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
-                tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para mañana`;
+            let cuerpoMensaje = `🌟 *${neg.nombre}*\n📅 ${fechaLegible}\n📊 Total: ${turnosNegocio.length} turno${turnosNegocio.length !== 1 ? 's' : ''}\n━━━━━━━━━━━━━━━━━━━━━\n`;
+            
+            turnosNegocio.forEach((turno, index) => {
+                const hora = formatTo12Hour(turno.hora_inicio);
+                const profesional = turno.profesional_nombre || 'No asignado';
+                const servicio = turno.servicio || '?';
                 
-                const porProfesional = {};
-                const porServicio = {};
-                
-                turnosNegocio.forEach(turno => {
-                    const profesional = turno.profesional_nombre || 'No asignado';
-                    const servicio = turno.servicio || 'No especificado';
-                    porProfesional[profesional] = (porProfesional[profesional] || 0) + 1;
-                    porServicio[servicio] = (porServicio[servicio] || 0) + 1;
-                });
+                cuerpoMensaje += `${index + 1}. ${hora} | ${turno.cliente_nombre}\n`;
+                cuerpoMensaje += `   💅 ${servicio} | 👩‍🎨 ${profesional}\n`;
+                cuerpoMensaje += `   📱 ${turno.cliente_whatsapp || '---'}\n`;
+                if (index < turnosNegocio.length - 1) cuerpoMensaje += `\n`;
+            });
 
-                cuerpoMensaje = `🌟 *${neg.nombre}*\n📅 ${fechaLegible}\n📊 Total: ${turnosNegocio.length} turno${turnosNegocio.length !== 1 ? 's' : ''}\n━━━━━━━━━━━━━━━━━━━━━\n`;
-                
-                turnosNegocio.forEach((turno, index) => {
-                    const hora = formatTo12Hour(turno.hora_inicio);
-                    const profesional = turno.profesional_nombre || 'No asignado';
-                    const servicio = turno.servicio || '?';
-                    
-                    cuerpoMensaje += `${index + 1}. ${hora} | ${turno.cliente_nombre}\n`;
-                    cuerpoMensaje += `   💅 ${servicio} | 👩‍🎨 ${profesional}\n`;
-                    cuerpoMensaje += `   📱 ${turno.cliente_whatsapp || '---'}\n`;
-                    if (index < turnosNegocio.length - 1) cuerpoMensaje += `\n`;
-                });
-
-                if (Object.keys(porProfesional).length > 0) {
-                    cuerpoMensaje += `\n━━━━━━━━━━━━━━━━━━━━━\n📊 *Por profesional:*\n`;
-                    for (const [prof, count] of Object.entries(porProfesional)) {
-                        cuerpoMensaje += `• ${prof}: ${count}\n`;
-                    }
+            if (Object.keys(porProfesional).length > 0) {
+                cuerpoMensaje += `\n━━━━━━━━━━━━━━━━━━━━━\n📊 *Por profesional:*\n`;
+                for (const [prof, count] of Object.entries(porProfesional)) {
+                    cuerpoMensaje += `• ${prof}: ${count}\n`;
                 }
-                
-                if (Object.keys(porServicio).length > 0) {
-                    cuerpoMensaje += `\n📊 *Por servicio:*\n`;
-                    for (const [serv, count] of Object.entries(porServicio)) {
-                        cuerpoMensaje += `• ${serv}: ${count}\n`;
-                    }
-                }
-                
-                cuerpoMensaje += `\n💖 *${neg.nombre}*`;
             }
+            
+            if (Object.keys(porServicio).length > 0) {
+                cuerpoMensaje += `\n📊 *Por servicio:*\n`;
+                for (const [serv, count] of Object.entries(porServicio)) {
+                    cuerpoMensaje += `• ${serv}: ${count}\n`;
+                }
+            }
+            
+            cuerpoMensaje += `\n💖 *${neg.nombre}*`;
 
-            // Sanitización estricta de encabezados tomada de tu Node.js
             const tituloLimpio = tituloMensaje.replace(/[^\x00-\x7F]/g, '').replace(/\s+/g, ' ').trim();
 
             try {
@@ -988,25 +996,28 @@ async function notificarTurnosManana() {
                 
                 if (resp.ok) enviados++; else errores++;
                 
-                // Espera de seguridad
-                await new Promise(r => setTimeout(r, 600)); 
+                // Mantenemos 2.5s pero como son muchos menos negocios, terminará rapidísimo
+                await new Promise(r => setTimeout(r, 2500)); 
                 
             } catch(e) { 
                 errores++; 
             }
         }
 
+        if (btnNotificar) btnNotificar.innerHTML = textoOriginalBtn;
+
         const canalesFinales = Array.from(temasUsados);
         let reporteFinal = `✅ Proceso finalizado:\n📨 Enviados a NTFY: ${enviados}\n❌ Errores: ${errores}\n\n📡 Canales contactados (${canalesFinales.length}):\n${canalesFinales.join(', ')}`;
         
         if (negociosSinTopic.length > 0) {
-            reporteFinal += `\n\n⚠️ ADVERTENCIA: ${negociosSinTopic.length} negocios no tienen canal guardado en la tabla y se enviaron a rservas-vencimientos. F12 para ver cuáles son.`;
             console.warn("⚠️ Negocios sin ntfy_topic configurado:", negociosSinTopic);
         }
 
         alert(reporteFinal);
         
     } catch (error) {
+        const btnNotificar = document.querySelector('button[onclick="notificarTurnosManana()"]');
+        if (btnNotificar) btnNotificar.innerHTML = '🔔 Turnos Mañana';
         alert('❌ Error general: ' + error.message);
     }
 }
