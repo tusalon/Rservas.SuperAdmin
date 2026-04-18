@@ -13,6 +13,8 @@ let ordenActual = "reservas"; // 'reservas' o 'fecha'
 let reservasDiarias = 0;
 let reservasDiariasData = [];
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
+let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
+let ultimaVezEscrito = JSON.parse(localStorage.getItem('ultima_vez_escrito')) || {};
 
 // ==================== VERIFICAR ACCESO ====================
 async function verificarAcceso() {
@@ -311,11 +313,14 @@ async function extenderFechaPago(id, nombreNegocio) {
 }
 
 // FUNCIÓN WHATSAPP ORIGINAL (con mensaje de soporte)
-function enviarWhatsApp(telefono, nombreNegocio) {
+function enviarWhatsApp(telefono, nombreNegocio, negocioId) {
     if (!telefono || telefono === 'No registrado' || telefono === '') {
         alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
         return;
     }
+    
+    // Registrar la fecha de último contacto
+    registrarUltimoContacto(negocioId, 'soporte');
     
     let numeroLimpio = telefono.replace(/\D/g, '');
     if (!numeroLimpio.startsWith('53') && numeroLimpio.length === 8) {
@@ -327,11 +332,14 @@ function enviarWhatsApp(telefono, nombreNegocio) {
 }
 
 // NUEVA FUNCIÓN WHATSAPP SIMPLE (solo "Hola")
-function enviarWhatsAppSimple(telefono, nombreNegocio) {
+function enviarWhatsAppSimple(telefono, nombreNegocio, negocioId) {
     if (!telefono || telefono === 'No registrado' || telefono === '') {
         alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
         return;
     }
+    
+    // Registrar la fecha de último contacto
+    registrarUltimoContacto(negocioId, 'hola');
     
     let numeroLimpio = telefono.replace(/\D/g, '');
     if (!numeroLimpio.startsWith('53') && numeroLimpio.length === 8) {
@@ -340,6 +348,40 @@ function enviarWhatsAppSimple(telefono, nombreNegocio) {
     
     const mensajeCodificado = encodeURIComponent("Hola");
     window.open(`https://wa.me/${numeroLimpio}?text=${mensajeCodificado}`, '_blank');
+}
+
+// Nueva función para registrar último contacto
+function registrarUltimoContacto(negocioId, tipo) {
+    const fecha = new Date();
+    const fechaFormateada = `${fecha.getDate()}/${fecha.getMonth() + 1}/${fecha.getFullYear()} ${fecha.getHours()}:${String(fecha.getMinutes()).padStart(2, '0')}`;
+    
+    if (!ultimaVezEscrito[negocioId]) {
+        ultimaVezEscrito[negocioId] = {};
+    }
+    
+    ultimaVezEscrito[negocioId][tipo] = fechaFormateada;
+    ultimaVezEscrito[negocioId].ultima = fechaFormateada;
+    
+    localStorage.setItem('ultima_vez_escrito', JSON.stringify(ultimaVezEscrito));
+    
+    // Actualizar la vista si estamos en el filtro correcto
+    actualizarListaNegocios();
+}
+
+// Función para obtener el texto de última vez escrito
+function getUltimaVezTexto(negocioId, tipo) {
+    const registro = ultimaVezEscrito[negocioId];
+    if (!registro) return '';
+    
+    if (tipo === 'soporte' && registro.soporte) {
+        return `📝 ${registro.soporte}`;
+    } else if (tipo === 'hola' && registro.hola) {
+        return `📝 ${registro.hola}`;
+    } else if (tipo === 'ultima' && registro.ultima) {
+        return `📝 ${registro.ultima}`;
+    }
+    
+    return '';
 }
 
 // FUNCIÓN NOTIFICAR ORIGINAL (con prompt para mensaje personalizado)
@@ -438,7 +480,11 @@ async function notificarATodos() {
 async function exportarCSV() {
     let resultados = [...negociosData];
     if (filtroActual !== 'todos') {
-        resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
+        if (filtroActual === 'eliminados') {
+            resultados = resultados.filter(n => eliminadosLocal.includes(n.id));
+        } else {
+            resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
+        }
     }
     if (filtroBusqueda) {
         resultados = resultados.filter(n => 
@@ -502,15 +548,16 @@ function filtrarPorEstado(estado) {
 function actualizarListaNegocios() {
     let resultados = [...negociosData];
     
-    // Si el filtro es pendiente, buscamos en nuestra memoria local
+    // Primero aplicar el filtro de estado
     if (filtroActual === 'pendiente') {
         resultados = resultados.filter(n => pendientesLocal.includes(n.id));
-    } 
-    // Para los demás estados, seguimos buscando en la base de datos
-    else if (filtroActual !== 'todos') {
+    } else if (filtroActual === 'eliminados') {
+        resultados = resultados.filter(n => eliminadosLocal.includes(n.id));
+    } else if (filtroActual !== 'todos') {
         resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
     }
     
+    // Luego aplicar búsqueda
     if (filtroBusqueda) {
         resultados = resultados.filter(n => 
             (n.nombre && n.nombre.toLowerCase().includes(filtroBusqueda)) ||
@@ -525,27 +572,29 @@ function actualizarListaNegocios() {
 }
 
 function actualizarBotonesFiltro() {
-    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva'];
+    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados'];
     estados.forEach(estado => {
         const btn = document.getElementById(`filtro-${estado}`);
         if (btn) {
-            btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-purple-600', 'bg-gray-600', 'text-white');
-            btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100', 'bg-purple-100', 'bg-gray-100', 'text-gray-700', 'text-green-700', 'text-red-700', 'text-yellow-700', 'text-purple-700');
+            btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-purple-600', 'bg-gray-600', 'bg-pink-600', 'text-white');
+            btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100', 'bg-purple-100', 'bg-gray-100', 'bg-pink-100', 'text-gray-700', 'text-green-700', 'text-red-700', 'text-yellow-700', 'text-purple-700');
             
             if (filtroActual === estado) {
                 if (estado === 'todos') btn.classList.add('bg-gray-800', 'text-white');
-                if (estado === 'activa') btn.classList.add('bg-green-600', 'text-white');
-                if (estado === 'suspendida') btn.classList.add('bg-red-600', 'text-white');
-                if (estado === 'trial') btn.classList.add('bg-yellow-600', 'text-white');
-                if (estado === 'pendiente') btn.classList.add('bg-purple-600', 'text-white');
-                if (estado === 'inactiva') btn.classList.add('bg-gray-600', 'text-white');
+                else if (estado === 'activa') btn.classList.add('bg-green-600', 'text-white');
+                else if (estado === 'suspendida') btn.classList.add('bg-red-600', 'text-white');
+                else if (estado === 'trial') btn.classList.add('bg-yellow-600', 'text-white');
+                else if (estado === 'pendiente') btn.classList.add('bg-purple-600', 'text-white');
+                else if (estado === 'inactiva') btn.classList.add('bg-gray-600', 'text-white');
+                else if (estado === 'eliminados') btn.classList.add('bg-pink-600', 'text-white');
             } else {
                 if (estado === 'todos') btn.classList.add('bg-gray-200', 'text-gray-700');
-                if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
-                if (estado === 'suspendida') btn.classList.add('bg-red-100', 'text-red-700');
-                if (estado === 'trial') btn.classList.add('bg-yellow-100', 'text-yellow-700');
-                if (estado === 'pendiente') btn.classList.add('bg-purple-100', 'text-purple-700');
-                if (estado === 'inactiva') btn.classList.add('bg-gray-100', 'text-gray-700');
+                else if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
+                else if (estado === 'suspendida') btn.classList.add('bg-red-100', 'text-red-700');
+                else if (estado === 'trial') btn.classList.add('bg-yellow-100', 'text-yellow-700');
+                else if (estado === 'pendiente') btn.classList.add('bg-purple-100', 'text-purple-700');
+                else if (estado === 'inactiva') btn.classList.add('bg-gray-100', 'text-gray-700');
+                else if (estado === 'eliminados') btn.classList.add('bg-pink-100', 'text-pink-700');
             }
         }
     });
@@ -560,7 +609,8 @@ function renderHeader() {
         suspendida: negociosData.filter(n => n.estado_suscripcion === 'suspendida').length,
         trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length,
         pendiente: negociosData.filter(n => pendientesLocal.includes(n.id)).length,
-        inactiva: negociosData.filter(n => n.estado_suscripcion === 'inactiva').length
+        inactiva: negociosData.filter(n => n.estado_suscripcion === 'inactiva').length,
+        eliminados: negociosData.filter(n => eliminadosLocal.includes(n.id)).length
     };
     
     // Obtener la fecha actual formateada
@@ -674,6 +724,7 @@ function renderHeader() {
                 <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">🟡 Prueba (${totalPorEstado.trial})</button>
                 <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
                 <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
+                <button id="filtro-eliminados" onclick="filtrarPorEstado('eliminados')" class="px-3 py-1.5 rounded-lg text-sm bg-pink-100 text-pink-700">🗑️ Eliminados (${totalPorEstado.eliminados})</button>
             </div>
         </div>
     `;
@@ -708,6 +759,9 @@ function renderListaNegocios(negocios) {
         const diasRestantes = n.dias_para_renovar || 0;
         const reservasHoy = getReservasDiariasPorNegocio(n.id);
         const esPendiente = pendientesLocal.includes(n.id);
+        const esEliminado = eliminadosLocal.includes(n.id);
+        const ultimoSoporte = getUltimaVezTexto(n.id, 'soporte');
+        const ultimoHola = getUltimaVezTexto(n.id, 'hola');
         
         const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
@@ -741,6 +795,7 @@ function renderListaNegocios(negocios) {
                             <h2 class="font-bold text-lg">${medallaTop}🏢 ${nombreMostrado}</h2>
                             <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
                             ${reservasHoy > 0 ? `<span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">📅 +${reservasHoy} hoy</span>` : ''}
+                            ${esEliminado ? `<span class="px-2 py-1 rounded-full text-xs bg-pink-100 text-pink-700 font-medium">🗑️ Eliminado</span>` : ''}
                         </div>
                         <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
@@ -785,15 +840,25 @@ function renderListaNegocios(negocios) {
                     
                     <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
                     
-                    <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
+                    <div class="flex flex-col gap-1">
+                        <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
+                        ${ultimoSoporte ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoSoporte}</span>` : ''}
+                    </div>
                     
-                    <button onclick="window.enviarWhatsAppSimple('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💚 WhatsApp Hola</button>
+                    <div class="flex flex-col gap-1">
+                        <button onclick="window.enviarWhatsAppSimple('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💚 WhatsApp Hola</button>
+                        ${ultimoHola ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoHola}</span>` : ''}
+                    </div>
                     
                     <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🔔 Notificar</button>
                     
                     <button onclick="window.notificarVencimiento(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⚠️ Avisar Vencimiento</button>
                     
                     <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🗑️ Baja</button>
+                    
+                    <button onclick="window.toggleEliminado('${n.id}')" class="${esEliminado ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-100 text-pink-700 hover:bg-pink-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
+                        ${esEliminado ? '👁️ Mostrar en Principal' : '🙈 Ocultar de Vista'}
+                    </button>
                 </div>
             </div>
         `;
@@ -831,6 +896,26 @@ function togglePendiente(id) {
     }
     
     localStorage.setItem('pendientes_admin', JSON.stringify(pendientesLocal));
+    actualizarListaNegocios();
+    renderHeader();
+}
+
+function toggleEliminado(id) {
+    const index = eliminadosLocal.indexOf(id);
+    
+    if (index > -1) {
+        eliminadosLocal.splice(index, 1);
+    } else {
+        eliminadosLocal.push(id);
+    }
+    
+    localStorage.setItem('eliminados_admin', JSON.stringify(eliminadosLocal));
+    
+    // Si estamos en la vista de eliminados y quitamos el último, volver a todos
+    if (filtroActual === 'eliminados' && eliminadosLocal.length === 0) {
+        filtroActual = 'todos';
+    }
+    
     actualizarListaNegocios();
     renderHeader();
 }
@@ -1040,6 +1125,7 @@ window.exportarCSV = exportarCSV;
 window.logout = logout;
 window.cambiarOrden = cambiarOrden;
 window.togglePendiente = togglePendiente;
+window.toggleEliminado = toggleEliminado;
 window.notificarTurnosManana = notificarTurnosManana;
 
 // ==================== INICIALIZACIÓN ====================
