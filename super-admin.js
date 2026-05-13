@@ -83,12 +83,27 @@ async function cargarNegocios() {
         }
         
         // Eliminar duplicados por ID
-        const unique = data.filter((item, index, self) => 
+        let unique = data.filter((item, index, self) => 
             index === self.findIndex(t => t.id === item.id)
         );
         
+        const idsNegocios = unique.map(n => n.id).filter(Boolean);
+        if (idsNegocios.length > 0) {
+            const { data: datosUrl, error: errorUrl } = await window.supabase
+                .from('negocios')
+                .select('id,sitio_web')
+                .in('id', idsNegocios);
+
+            if (errorUrl) {
+                console.warn('No se pudieron cargar las URLs de los negocios:', errorUrl);
+            } else if (datosUrl) {
+                const urlsPorId = Object.fromEntries(datosUrl.map(n => [n.id, n.sitio_web]));
+                unique = unique.map(n => ({ ...n, sitio_web: urlsPorId[n.id] || n.sitio_web || '' }));
+            }
+        }
+
         negociosData = unique;
-        console.log(`âœ… ${unique.length} negocios cargados`);
+        console.log(`✅ ${unique.length} negocios cargados`);
         return unique;
     } catch (error) {
         console.error('Error cargando negocios:', error);
@@ -826,7 +841,7 @@ function renderListaNegocios(negocios) {
                         </div>
                         <p class="text-sm text-gray-600">ðŸ“§ ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">ðŸ“± ${telefonoMostrado}</p>
-                        ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">🔗 ${urlLabel}</a></p>` : ''}
+                        ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">Abrir negocio (${urlLabel})</a></p>` : ''}
                     </div>
                 </div>
                 
@@ -1212,3 +1227,4 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
+
