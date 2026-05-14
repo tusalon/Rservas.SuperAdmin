@@ -5,6 +5,8 @@ const DIAS_POR_DEFECTO = 15;
 const WHATSAPP_MENSAJE = "Hola, escribimos desde el soporte de Rservas.Roma para saber en qué podemos ayudarle";
 const NTFY_TOPIC_GLOBAL = "rservas-vencimientos";
 const ADMIN_EMAIL = "rservasroma@gmail.com";
+const CLIENTES_ROOT_LOCAL = "C:\\Users\\RODO\\Documents\\ClientesRservas";
+const AUTOMATION_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\New project";
 
 let filtroActual = "todos";
 let filtroBusqueda = "";
@@ -140,6 +142,88 @@ function getUrlLabel(url) {
         return new URL(url).hostname.replace(/^www\./i, '') || url;
     } catch (error) {
         return url;
+    }
+}
+
+function obtenerSlugDesdeUrl(url) {
+    if (!url) return '';
+
+    try {
+        const parsed = new URL(url);
+        const partes = parsed.pathname.split('/').filter(Boolean);
+        return partes[0] || '';
+    } catch (error) {
+        return '';
+    }
+}
+
+function limpiarValorCmd(value) {
+    return String(value || '').replace(/"/g, '').trim();
+}
+
+function obtenerCarpetaSugerida(negocio) {
+    const urlNegocio = normalizarUrlNegocio(negocio);
+    return limpiarValorCmd(
+        negocio.carpeta_local ||
+        negocio.carpeta ||
+        negocio.slug_local ||
+        negocio.slug ||
+        negocio.nombre ||
+        obtenerSlugDesdeUrl(urlNegocio)
+    );
+}
+
+function crearComandoActualizarNegocio(carpetaLocal) {
+    const carpeta = limpiarValorCmd(carpetaLocal);
+    const target = `${CLIENTES_ROOT_LOCAL}\\${carpeta}`;
+
+    return [
+        `cd /d "${AUTOMATION_DIR_LOCAL}"`,
+        `node update-client-from-exotic.js --target "${target}" --apply`,
+        `cd /d "${target}"`,
+        'git status',
+        'git add .',
+        'git commit -m "Actualizar logica de reservas"',
+        'git push'
+    ].join('\r\n');
+}
+
+async function copiarAlPortapapeles(texto) {
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(texto);
+        return true;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = texto;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copiado = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return copiado;
+}
+
+async function prepararActualizacionNegocio(negocio) {
+    const sugerida = obtenerCarpetaSugerida(negocio);
+    const carpeta = prompt(
+        `Carpeta local del negocio "${negocio.nombre || 'Sin nombre'}":`,
+        sugerida
+    );
+
+    if (!carpeta) return;
+
+    const comando = crearComandoActualizarNegocio(carpeta);
+
+    try {
+        const copiado = await copiarAlPortapapeles(comando);
+        if (!copiado) throw new Error('copy-failed');
+        alert('Comando copiado. Pegalo en CMD como administrador para actualizar este negocio desde exoticbyyuly.');
+    } catch (error) {
+        console.error('No se pudo copiar el comando:', error);
+        prompt('No se pudo copiar automaticamente. Copia este comando:', comando);
     }
 }
 
@@ -882,6 +966,8 @@ function renderListaNegocios(negocios) {
                     ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
                     
                     <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
+
+                    <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar app</button>
                     
                     <div class="flex flex-col gap-1">
                         <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
@@ -1163,6 +1249,7 @@ window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
 window.notificarNegocio = notificarNegocio;
 window.notificarVencimiento = notificarVencimiento;  
+window.prepararActualizacionNegocio = prepararActualizacionNegocio;
 window.notificarATodos = notificarATodos;
 window.exportarCSV = exportarCSV;
 window.logout = logout;
