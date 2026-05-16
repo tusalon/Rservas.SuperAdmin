@@ -7,6 +7,221 @@ const NTFY_TOPIC_GLOBAL = "rservas-vencimientos";
 const ADMIN_EMAIL = "rservasroma@gmail.com";
 const CLIENTES_ROOT_LOCAL = "C:\\Users\\RODO\\Documents\\ClientesRservas";
 const AUTOMATION_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\New project";
+const CARPETAS_CLIENTES = [
+    "-amynails",
+    "acrykanails",
+    "adanails",
+    "Adhara Glow Studio",
+    "adis",
+    "adrinails",
+    "ailiananailsstudio",
+    "ailin-nails",
+    "alexnails",
+    "aliettynails",
+    "alisnails",
+    "alyssalon",
+    "amani",
+    "amy-nails",
+    "amynails",
+    "amy_nails",
+    "angelnails",
+    "angelstudiobyjennyrodriguez",
+    "angeykei",
+    "anisnails",
+    "anitasnailstudio",
+    "anyi",
+    "arlenenailssalon",
+    "arletnails",
+    "arynails",
+    "atuestilonails",
+    "aylinnails",
+    "beautifull",
+    "bela-nails",
+    "bella-mile",
+    "bellasalon",
+    "bellasmanos",
+    "bellezadchina",
+    "bennetsalon",
+    "bethnails",
+    "bettynails",
+    "bianailsart",
+    "boom_nails",
+    "brendabeautysalon",
+    "bymarianailsart",
+    "cailcnailsliliana",
+    "caminails",
+    "cheilybynails",
+    "cherrynailsbydaniela",
+    "chinysalon",
+    "claranails",
+    "cutieenails",
+    "cynthianailsart",
+    "dailynailssalon",
+    "danis",
+    "danisbeautysalon",
+    "darlynails",
+    "darynails",
+    "day90artnails",
+    "dayanails",
+    "dayinails",
+    "dayisnails",
+    "daylincorona",
+    "daylinnailsdesigner",
+    "dbella",
+    "dcora-nails-studio",
+    "deilisnailsart",
+    "deyannails",
+    "divahabananails",
+    "divinetouch",
+    "dnailspassion",
+    "drosesalonbycelin",
+    "dulce-studionails",
+    "Dunia-Nails",
+    "dydnails",
+    "elegance-house",
+    "elegansnailssalonbyines",
+    "elynails",
+    "emynails",
+    "erikitanails",
+    "exoticnailsbyyuli",
+    "fantasy-salon",
+    "fonsy-nails",
+    "gabyestudio",
+    "gabynailsbeauty",
+    "geannynails",
+    "gels_adne",
+    "glossnails",
+    "gordis-nails",
+    "grace-nails",
+    "hanydorta-nailsdesigner",
+    "hhnails",
+    "imalisnails",
+    "indrilaynails",
+    "ingrid-nails",
+    "irinanails",
+    "jadenails",
+    "jaynails",
+    "jenisnails",
+    "jessinails",
+    "jimornails",
+    "kamiborgesnails",
+    "karlanails",
+    "katynails",
+    "keniastudio-nails",
+    "ketyca-salon",
+    "ketycasalon",
+    "ketycassalon",
+    "ketyca_salon",
+    "kirynailssalon",
+    "knelanailsart",
+    "ladyanne",
+    "lagbarberia",
+    "laksmispa",
+    "laurallanesnails",
+    "leesnailssalon",
+    "leibniznails",
+    "letynails",
+    "leyanna-studio",
+    "leydi_nailsstudio",
+    "lianails",
+    "liannynails",
+    "lidynails",
+    "lietynails",
+    "lilisnails",
+    "lisbleubylili",
+    "lisnailstudio",
+    "lissynails",
+    "lizcintado",
+    "luxurynailsspa",
+    "marelisnails",
+    "mariapilarnails",
+    "marinelda-nails",
+    "maryoritanails",
+    "melissanails",
+    "melnails",
+    "meluksalon",
+    "melynails",
+    "metanoia",
+    "milas-studio",
+    "milianlash-studio",
+    "mischicasnails",
+    "mknails",
+    "moniknails",
+    "morenanails",
+    "mysweetme",
+    "naillabbymelisaglez",
+    "nails-by-karlasalon",
+    "nails-gretel",
+    "nailsainuy",
+    "nailsartstudiobyari",
+    "nailsbyanesita",
+    "nailsbyheyllen",
+    "nailsbyleiby",
+    "nailsbylia",
+    "nailsbymale",
+    "nailsglamme",
+    "nailsjens",
+    "nailssalonebenezer",
+    "nailsyade",
+    "nailsyey",
+    "nailszury",
+    "naturalglambysheilasanguily",
+    "nelysnails",
+    "norkykmnails",
+    "ohanasalondebelleza",
+    "olymposalon",
+    "paulanails",
+    "perlas-preciosas",
+    "pinkgreendaya",
+    "rachynails",
+    "risellsalon",
+    "roblesnailshomestudio",
+    "rosynails",
+    "rservasroma",
+    "salonbeautynails",
+    "saloneresbella",
+    "salonmechimaria",
+    "salonmelenin",
+    "salonmujervirtuosa",
+    "salonroxynails",
+    "salonstiloestela",
+    "salonvenus",
+    "salonyacademiadoñadivarodríguez",
+    "sandra-nails-studio",
+    "sheilitabeauty",
+    "sheyla-nails",
+    "sheyla_nails",
+    "sinaynails",
+    "srtagarcialashacademy",
+    "studioisma.nails",
+    "studiolisnails",
+    "sulynails",
+    "sunbyoda",
+    "thaly-nails-studio",
+    "theplaceofloresnails",
+    "tulipsalon",
+    "unas_de_claudia",
+    "valentinas",
+    "vlindernails",
+    "yadisnails",
+    "yailennails",
+    "yalinails",
+    "yaminailsbeauty",
+    "yanianails",
+    "yanisnails",
+    "yasminnails",
+    "yayinailssalonyspa",
+    "ybeautyhabana",
+    "yeney-nails",
+    "yinenails",
+    "yolynails",
+    "ysberosi",
+    "yulynails",
+    "yuly_nails",
+    "yurisnailsart",
+    "yvnaranjonails",
+    "yysalon"
+];
 
 let filtroActual = "todos";
 let filtroBusqueda = "";
@@ -157,20 +372,94 @@ function obtenerSlugDesdeUrl(url) {
     }
 }
 
+function obtenerHostnameDesdeUrl(url) {
+    if (!url) return '';
+
+    try {
+        return new URL(url).hostname.replace(/^www\./i, '').split('.')[0] || '';
+    } catch (error) {
+        return '';
+    }
+}
+
 function limpiarValorCmd(value) {
     return String(value || '').replace(/"/g, '').trim();
 }
 
-function obtenerCarpetaSugerida(negocio) {
+function normalizarParaMatch(value) {
+    return limpiarValorCmd(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
+function agregarCandidatoCarpeta(candidatos, value) {
+    const limpio = limpiarValorCmd(value);
+    if (!limpio) return;
+    if (!candidatos.some(c => c.toLowerCase() === limpio.toLowerCase())) {
+        candidatos.push(limpio);
+    }
+}
+
+function obtenerCandidatosCarpetaNegocio(negocio) {
     const urlNegocio = normalizarUrlNegocio(negocio);
-    return limpiarValorCmd(
-        negocio.carpeta_local ||
-        negocio.carpeta ||
-        negocio.slug_local ||
-        negocio.slug ||
-        negocio.nombre ||
-        obtenerSlugDesdeUrl(urlNegocio)
-    );
+    const candidatos = [];
+
+    agregarCandidatoCarpeta(candidatos, negocio.carpeta_local);
+    agregarCandidatoCarpeta(candidatos, negocio.carpeta);
+    agregarCandidatoCarpeta(candidatos, negocio.slug_local);
+    agregarCandidatoCarpeta(candidatos, negocio.slug);
+    agregarCandidatoCarpeta(candidatos, obtenerSlugDesdeUrl(urlNegocio));
+    agregarCandidatoCarpeta(candidatos, obtenerHostnameDesdeUrl(urlNegocio));
+    agregarCandidatoCarpeta(candidatos, negocio.nombre);
+    agregarCandidatoCarpeta(candidatos, negocio.nombre_negocio);
+    agregarCandidatoCarpeta(candidatos, negocio.usuario);
+
+    return candidatos;
+}
+
+function elegirMejorCarpeta(candidata, coincidencias) {
+    const candidataLower = candidata.toLowerCase();
+    const exacta = coincidencias.find(c => c.toLowerCase() === candidataLower);
+    if (exacta) return exacta;
+
+    return [...coincidencias].sort((a, b) => {
+        const score = value => {
+            const lower = value.toLowerCase();
+            let puntos = 0;
+            if (lower.includes('generados')) puntos += 20;
+            if (lower.includes('backup')) puntos += 20;
+            if (lower.startsWith('-')) puntos += 10;
+            puntos += lower.length / 100;
+            return puntos;
+        };
+
+        return score(a) - score(b);
+    })[0] || '';
+}
+
+function buscarCarpetaCliente(negocio) {
+    const candidatos = obtenerCandidatosCarpetaNegocio(negocio);
+
+    for (const candidata of candidatos) {
+        const candidataNormalizada = normalizarParaMatch(candidata);
+        if (!candidataNormalizada) continue;
+
+        const coincidencias = CARPETAS_CLIENTES.filter(carpeta => normalizarParaMatch(carpeta) === candidataNormalizada);
+        if (coincidencias.length > 0) {
+            return elegirMejorCarpeta(candidata, coincidencias);
+        }
+    }
+
+    return '';
+}
+
+function obtenerCarpetaSugerida(negocio) {
+    const carpetaEncontrada = buscarCarpetaCliente(negocio);
+    if (carpetaEncontrada) return carpetaEncontrada;
+
+    return obtenerCandidatosCarpetaNegocio(negocio)[0] || '';
 }
 
 function crearComandoActualizarNegocio(carpetaLocal) {
@@ -888,6 +1177,7 @@ function renderListaNegocios(negocios) {
         const ultimoHola = getUltimaVezTexto(n.id, 'hola');
         const urlNegocio = normalizarUrlNegocio(n);
         const urlLabel = urlNegocio ? escapeHtml(getUrlLabel(urlNegocio)) : '';
+        const carpetaCliente = buscarCarpetaCliente(n);
         
         const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
@@ -926,6 +1216,7 @@ function renderListaNegocios(negocios) {
                         <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
                         ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">Abrir negocio (${urlLabel})</a></p>` : ''}
+                        <p class="text-sm ${carpetaCliente ? 'text-emerald-700' : 'text-amber-700'}">Carpeta: ${carpetaCliente ? escapeHtml(carpetaCliente) : 'sin match automatico'}</p>
                     </div>
                 </div>
                 
