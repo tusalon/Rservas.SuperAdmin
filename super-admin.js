@@ -1,14 +1,13 @@
-// super-admin.js
-// ==================== CONFIGURACIÓN ====================
+﻿// super-admin.js
+// ==================== CONFIGURACIÃ“N ====================
 const PRECIO_MENSUAL = 1000;
 const DIAS_POR_DEFECTO = 15;
-const WHATSAPP_MENSAJE = "Hola, escribimos desde el soporte de Rservas.Roma para saber en qué podemos ayudarle";
+const WHATSAPP_MENSAJE = "Hola, escribimos desde el soporte de Rservas.Roma para saber en quÃ© podemos ayudarle";
 const NTFY_TOPIC_GLOBAL = "rservas-vencimientos";
 const ADMIN_EMAIL = "rservasroma@gmail.com";
 const CLIENTES_ROOT_LOCAL = "C:\\Users\\RODO\\Documents\\ClientesRservas";
 const AUTOMATION_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\New project";
 const CARPETAS_CLIENTES = [
-    "-amynails",
     "acrykanails",
     "adanails",
     "Adhara Glow Studio",
@@ -23,8 +22,9 @@ const CARPETAS_CLIENTES = [
     "alyssalon",
     "amani",
     "amy_nails",
-    "amy-nails",
     "amynails",
+    "amy-nails",
+    "-amynails",
     "angelnails",
     "angelstudiobyjennyrodriguez",
     "angeykei",
@@ -72,6 +72,7 @@ const CARPETAS_CLIENTES = [
     "dbella",
     "dcora-nails-studio",
     "deilisnailsart",
+    "dermar",
     "deyannails",
     "diamelisnails",
     "divahabananails",
@@ -98,6 +99,7 @@ const CARPETAS_CLIENTES = [
     "gordis-nails-generados",
     "gordis-nails-generados-limpio",
     "grace-nails",
+    "hairsalonkeyla",
     "hanydorta-nailsdesigner",
     "hhnails",
     "imalisnails",
@@ -113,11 +115,12 @@ const CARPETAS_CLIENTES = [
     "jimornails",
     "kamiborgesnails",
     "karlanails",
+    "kartnails",
     "katynails",
     "keniastudio-nails",
     "ketyca_salon",
-    "ketyca-salon",
     "ketycasalon",
+    "ketyca-salon",
     "ketycassalon",
     "kirynailssalon",
     "knelanailsart",
@@ -137,6 +140,7 @@ const CARPETAS_CLIENTES = [
     "lilisnails",
     "lisbleubylili",
     "lisnailstudio",
+    "lisseffect",
     "lissynails",
     "lizcintado",
     "luxurynailsspa",
@@ -144,13 +148,16 @@ const CARPETAS_CLIENTES = [
     "mariapilarnails",
     "marinelda-nails",
     "maryoritanails",
+    "melanienails",
     "melissanails",
     "melnails",
+    "melodynailartstudio",
     "meluksalon",
     "melynails",
     "metanoia",
     "milas-studio",
     "milianlash-studio",
+    "milynails",
     "mischicasnails",
     "mknails",
     "moniknails",
@@ -158,16 +165,16 @@ const CARPETAS_CLIENTES = [
     "mumisalon",
     "mysweetme",
     "naillabbymelisaglez",
-    "nails-by-karlasalon",
-    "nails-gretel",
     "nailsainuy",
     "nailsartstudiobyari",
     "nailsbyanesita",
     "nailsbyheyllen",
+    "nails-by-karlasalon",
     "nailsbyleiby",
     "nailsbylia",
     "nailsbymale",
     "nailsglamme",
+    "nails-gretel",
     "nailsjens",
     "nailssalonebenezer",
     "nailsyade",
@@ -188,6 +195,7 @@ const CARPETAS_CLIENTES = [
     "roblesnailshomestudio",
     "rosynails",
     "rservasroma",
+    "rservasromaprueba",
     "salonbeautynails",
     "saloneresbella",
     "salonmechimaria",
@@ -215,14 +223,17 @@ const CARPETAS_CLIENTES = [
     "valentinas",
     "vlindernails",
     "yadisnails",
+    "yadistudio",
     "yailennails",
     "yalinails",
     "yaminailsbeauty",
     "yanianails",
     "yanisnails",
+    "yaquilobainanailspro",
     "yasminnails",
     "yayinailssalonyspa",
     "ybeautyhabana",
+    "yelynails",
     "yeney-nails",
     "yinenails",
     "yolynails",
@@ -250,12 +261,12 @@ async function verificarAcceso() {
         const { data: { user }, error } = await window.supabase.auth.getUser();
         
         if (error || !user || user.email !== ADMIN_EMAIL) {
-            console.log('❌ Acceso denegado, redirigiendo a login...');
+            console.log('âŒ Acceso denegado, redirigiendo a login...');
             window.location.href = 'login.html';
             return false;
         }
         
-        console.log('✅ Acceso verificado:', user.email);
+        console.log('âœ… Acceso verificado:', user.email);
         return true;
     } catch (error) {
         console.error('Error verificando acceso:', error);
@@ -293,7 +304,7 @@ async function obtenerReservasDiarias() {
 // ==================== CARGAR NEGOCIOS ====================
 async function cargarNegocios() {
     try {
-        console.log('🔄 Cargando negocios...');
+        console.log('ðŸ”„ Cargando negocios...');
         
         const { data, error } = await window.supabase
             .from('vista_negocios_admin')
@@ -306,7 +317,7 @@ async function cargarNegocios() {
         }
         
         if (!data || data.length === 0) {
-            console.warn('⚠️ No se encontraron negocios');
+            console.warn('âš ï¸ No se encontraron negocios');
             return [];
         }
         
@@ -331,7 +342,7 @@ async function cargarNegocios() {
         }
 
         negociosData = unique;
-        console.log(`✅ ${unique.length} negocios cargados`);
+        console.log(`âœ… ${unique.length} negocios cargados`);
         return unique;
     } catch (error) {
         console.error('Error cargando negocios:', error);
@@ -533,7 +544,7 @@ function mostrarErrorConexion() {
         listaDiv.innerHTML = `
             <div class="max-w-7xl mx-auto p-4">
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
-                    <p class="font-bold">❌ Error de conexión</p>
+                    <p class="font-bold">âŒ Error de conexiÃ³n</p>
                     <p>No se pudieron cargar los negocios. Verifica que la vista 'vista_negocios_admin' exista en Supabase.</p>
                     <button onclick="location.reload()" class="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm">Reintentar</button>
                 </div>
@@ -542,7 +553,7 @@ function mostrarErrorConexion() {
     }
 }
 
-// ==================== ESTADÍSTICAS ====================
+// ==================== ESTADÃSTICAS ====================
 function calcularEstadisticas(negocios) {
     const total = negocios.length;
     const activos = negocios.filter(n => n.estado_suscripcion === 'activa').length;
@@ -616,7 +627,7 @@ function actualizarBotonOrden() {
 
 // ==================== ACCIONES ====================
 async function activarDesdeTrial(id, nombreNegocio) {
-    if (!confirm(`✅ ¿Activar negocio?\n\nNegocio: ${nombreNegocio}\n\nPasará de "Prueba" a "ACTIVO".\n\nPróximo pago en ${DIAS_POR_DEFECTO} días.`)) return;
+    if (!confirm(`âœ… Â¿Activar negocio?\n\nNegocio: ${nombreNegocio}\n\nPasarÃ¡ de "Prueba" a "ACTIVO".\n\nPrÃ³ximo pago en ${DIAS_POR_DEFECTO} dÃ­as.`)) return;
     
     const nuevaFecha = calcularFechaMasDias(DIAS_POR_DEFECTO);
     
@@ -632,15 +643,15 @@ async function activarDesdeTrial(id, nombreNegocio) {
             .eq('negocio_id', id);
         
         if (error) throw error;
-        alert(`✅ Negocio activado. Próximo pago: ${nuevaFecha}`);
+        alert(`âœ… Negocio activado. PrÃ³ximo pago: ${nuevaFecha}`);
         location.reload();
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert('âŒ Error: ' + error.message);
     }
 }
 
 async function suspenderNegocio(id, nombreNegocio) {
-    if (!confirm(`⏸️ ¿Suspender ${nombreNegocio}?\n\nEl negocio no podrá acceder hasta que se reactive.`)) return;
+    if (!confirm(`â¸ï¸ Â¿Suspender ${nombreNegocio}?\n\nEl negocio no podrÃ¡ acceder hasta que se reactive.`)) return;
     
     try {
         const { error } = await window.supabase
@@ -649,15 +660,15 @@ async function suspenderNegocio(id, nombreNegocio) {
             .eq('negocio_id', id);
         
         if (error) throw error;
-        alert('✅ Negocio suspendido correctamente');
+        alert('âœ… Negocio suspendido correctamente');
         location.reload();
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert('âŒ Error: ' + error.message);
     }
 }
 
 async function reactivarNegocio(id, nombreNegocio) {
-    if (!confirm(`▶️ ¿Reactivar ${nombreNegocio}?\n\nSe generará un nuevo período de ${DIAS_POR_DEFECTO} días.`)) return;
+    if (!confirm(`â–¶ï¸ Â¿Reactivar ${nombreNegocio}?\n\nSe generarÃ¡ un nuevo perÃ­odo de ${DIAS_POR_DEFECTO} dÃ­as.`)) return;
     
     const nuevaFecha = calcularFechaMasDias(DIAS_POR_DEFECTO);
     
@@ -673,16 +684,16 @@ async function reactivarNegocio(id, nombreNegocio) {
             .eq('negocio_id', id);
         
         if (error) throw error;
-        alert(`✅ Negocio reactivado. Próximo pago: ${nuevaFecha}`);
+        alert(`âœ… Negocio reactivado. PrÃ³ximo pago: ${nuevaFecha}`);
         location.reload();
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert('âŒ Error: ' + error.message);
     }
 }
 
 async function inactivarNegocio(id, nombreNegocio) {
-    if (!confirm(`⚠️ ¿Dar de baja DEFINITIVAMENTE a ${nombreNegocio}?\n\nEsta acción es irreversible.`)) return;
-    if (!confirm('Última oportunidad. ¿Estás completamente seguro?')) return;
+    if (!confirm(`âš ï¸ Â¿Dar de baja DEFINITIVAMENTE a ${nombreNegocio}?\n\nEsta acciÃ³n es irreversible.`)) return;
+    if (!confirm('Ãšltima oportunidad. Â¿EstÃ¡s completamente seguro?')) return;
     
     try {
         const { error } = await window.supabase
@@ -691,30 +702,30 @@ async function inactivarNegocio(id, nombreNegocio) {
             .eq('negocio_id', id);
         
         if (error) throw error;
-        alert('✅ Negocio dado de baja permanentemente');
+        alert('âœ… Negocio dado de baja permanentemente');
         location.reload();
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert('âŒ Error: ' + error.message);
     }
 }
 
 async function extenderFechaPago(id, nombreNegocio) {
-    const diasExtras = prompt(`📅 Extender pago de ${nombreNegocio}\n\nDías a extender (recomendado: ${DIAS_POR_DEFECTO}):`, DIAS_POR_DEFECTO);
+    const diasExtras = prompt(`ðŸ“… Extender pago de ${nombreNegocio}\n\nDÃ­as a extender (recomendado: ${DIAS_POR_DEFECTO}):`, DIAS_POR_DEFECTO);
     if (!diasExtras) return;
     
     const diasNum = parseInt(diasExtras);
     if (isNaN(diasNum) || diasNum <= 0) {
-        alert('❌ Ingrese un número de días válido');
+        alert('âŒ Ingrese un nÃºmero de dÃ­as vÃ¡lido');
         return;
     }
     
     const nuevaFecha = calcularFechaMasDias(diasNum);
-    const nuevoMonto = prompt(`💰 Monto del pago en CUP:\n\nMonto actual: ${PRECIO_MENSUAL} CUP`, PRECIO_MENSUAL);
+    const nuevoMonto = prompt(`ðŸ’° Monto del pago en CUP:\n\nMonto actual: ${PRECIO_MENSUAL} CUP`, PRECIO_MENSUAL);
     if (!nuevoMonto) return;
     
     const montoNum = parseFloat(nuevoMonto);
     if (isNaN(montoNum) || montoNum <= 0) {
-        alert('❌ Monto inválido');
+        alert('âŒ Monto invÃ¡lido');
         return;
     }
     
@@ -729,21 +740,21 @@ async function extenderFechaPago(id, nombreNegocio) {
             .eq('negocio_id', id);
         
         if (error) throw error;
-        alert(`✅ Fecha actualizada: ${nuevaFecha}\n💰 Monto: ${montoNum} CUP`);
+        alert(`âœ… Fecha actualizada: ${nuevaFecha}\nðŸ’° Monto: ${montoNum} CUP`);
         location.reload();
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert('âŒ Error: ' + error.message);
     }
 }
 
-// FUNCIÓN WHATSAPP ORIGINAL (con mensaje de soporte)
+// FUNCIÃ“N WHATSAPP ORIGINAL (con mensaje de soporte)
 function enviarWhatsApp(telefono, nombreNegocio, negocioId) {
     if (!telefono || telefono === 'No registrado' || telefono === '') {
-        alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
+        alert(`âš ï¸ ${nombreNegocio} no tiene nÃºmero de telÃ©fono registrado`);
         return;
     }
     
-    // Registrar la fecha de último contacto
+    // Registrar la fecha de Ãºltimo contacto
     registrarUltimoContacto(negocioId, 'soporte');
     
     let numeroLimpio = telefono.replace(/\D/g, '');
@@ -755,14 +766,14 @@ function enviarWhatsApp(telefono, nombreNegocio, negocioId) {
     window.open(`https://wa.me/${numeroLimpio}?text=${mensajeCodificado}`, '_blank');
 }
 
-// NUEVA FUNCIÓN WHATSAPP SIMPLE (solo "Hola")
+// NUEVA FUNCIÃ“N WHATSAPP SIMPLE (solo "Hola")
 function enviarWhatsAppSimple(telefono, nombreNegocio, negocioId) {
     if (!telefono || telefono === 'No registrado' || telefono === '') {
-        alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
+        alert(`âš ï¸ ${nombreNegocio} no tiene nÃºmero de telÃ©fono registrado`);
         return;
     }
     
-    // Registrar la fecha de último contacto
+    // Registrar la fecha de Ãºltimo contacto
     registrarUltimoContacto(negocioId, 'hola');
     
     let numeroLimpio = telefono.replace(/\D/g, '');
@@ -774,7 +785,7 @@ function enviarWhatsAppSimple(telefono, nombreNegocio, negocioId) {
     window.open(`https://wa.me/${numeroLimpio}?text=${mensajeCodificado}`, '_blank');
 }
 
-// Nueva función para registrar último contacto
+// Nueva funciÃ³n para registrar Ãºltimo contacto
 function registrarUltimoContacto(negocioId, tipo) {
     const fecha = new Date();
     const fechaFormateada = `${fecha.getDate()}/${fecha.getMonth() + 1}/${fecha.getFullYear()} ${fecha.getHours()}:${String(fecha.getMinutes()).padStart(2, '0')}`;
@@ -792,25 +803,25 @@ function registrarUltimoContacto(negocioId, tipo) {
     actualizarListaNegocios();
 }
 
-// Función para obtener el texto de última vez escrito
+// FunciÃ³n para obtener el texto de Ãºltima vez escrito
 function getUltimaVezTexto(negocioId, tipo) {
     const registro = ultimaVezEscrito[negocioId];
     if (!registro) return '';
     
     if (tipo === 'soporte' && registro.soporte) {
-        return `📝 ${registro.soporte}`;
+        return `ðŸ“ ${registro.soporte}`;
     } else if (tipo === 'hola' && registro.hola) {
-        return `📝 ${registro.hola}`;
+        return `ðŸ“ ${registro.hola}`;
     } else if (tipo === 'ultima' && registro.ultima) {
-        return `📝 ${registro.ultima}`;
+        return `ðŸ“ ${registro.ultima}`;
     }
     
     return '';
 }
 
-// FUNCIÓN NOTIFICAR ORIGINAL (con prompt para mensaje personalizado)
+// FUNCIÃ“N NOTIFICAR ORIGINAL (con prompt para mensaje personalizado)
 async function notificarNegocio(negocio) {
-    const mensaje = prompt(`📢 Mensaje para ${negocio.nombre}:`, WHATSAPP_MENSAJE);
+    const mensaje = prompt(`ðŸ“¢ Mensaje para ${negocio.nombre}:`, WHATSAPP_MENSAJE);
     if (!mensaje) return;
     
     const tema = negocio.ntfy_topic || NTFY_TOPIC_GLOBAL;
@@ -820,29 +831,29 @@ async function notificarNegocio(negocio) {
             method: 'POST',
             body: mensaje,
             headers: {
-                'Title': `📢 Mensaje para ${negocio.nombre}`,
+                'Title': `ðŸ“¢ Mensaje para ${negocio.nombre}`,
                 'Priority': 'default',
                 'Tags': 'mega'
             }
         });
         
         if (response.ok) {
-            alert('✅ Notificación enviada correctamente');
+            alert('âœ… NotificaciÃ³n enviada correctamente');
         } else {
-            alert('❌ Error al enviar notificación');
+            alert('âŒ Error al enviar notificaciÃ³n');
         }
     } catch (error) {
-        alert('❌ Error de red: ' + error.message);
+        alert('âŒ Error de red: ' + error.message);
     }
 }
 
-// NUEVA FUNCIÓN NOTIFICACIÓN DE VENCIMIENTO
+// NUEVA FUNCIÃ“N NOTIFICACIÃ“N DE VENCIMIENTO
 async function notificarVencimiento(negocio) {
-    const numeroCuenta = prompt(`💰 AVISO DE VENCIMIENTO para ${negocio.nombre}\n\nIngresa el número de cuenta o método de pago para incluir en el mensaje:\n(ej: 1234-5678-9012, Transfermóvil, Enzona, etc.)`);
+    const numeroCuenta = prompt(`ðŸ’° AVISO DE VENCIMIENTO para ${negocio.nombre}\n\nIngresa el nÃºmero de cuenta o mÃ©todo de pago para incluir en el mensaje:\n(ej: 1234-5678-9012, TransfermÃ³vil, Enzona, etc.)`);
     
     if (!numeroCuenta) return;
     
-    const mensaje = `Hola, mañana vence la suscripción mensual. Por favor realizar el pago a esta cuenta: ${numeroCuenta}`;
+    const mensaje = `Hola, maÃ±ana vence la suscripciÃ³n mensual. Por favor realizar el pago a esta cuenta: ${numeroCuenta}`;
     const tema = negocio.ntfy_topic || NTFY_TOPIC_GLOBAL;
     
     try {
@@ -850,19 +861,19 @@ async function notificarVencimiento(negocio) {
             method: 'POST',
             body: mensaje,
             headers: {
-                'Title': `⚠️ Vencimiento de suscripción - ${negocio.nombre}`,
+                'Title': `âš ï¸ Vencimiento de suscripciÃ³n - ${negocio.nombre}`,
                 'Priority': 'high',
                 'Tags': 'warning,calendar'
             }
         });
         
         if (response.ok) {
-            alert(`✅ Notificación de vencimiento enviada a ${negocio.nombre}\n📨 Mensaje: ${mensaje}`);
+            alert(`âœ… NotificaciÃ³n de vencimiento enviada a ${negocio.nombre}\nðŸ“¨ Mensaje: ${mensaje}`);
         } else {
-            alert('❌ Error al enviar notificación');
+            alert('âŒ Error al enviar notificaciÃ³n');
         }
     } catch (error) {
-        alert('❌ Error de red: ' + error.message);
+        alert('âŒ Error de red: ' + error.message);
     }
 }
 
@@ -870,11 +881,11 @@ async function notificarATodos() {
     const activos = negociosData.filter(n => n.estado_suscripcion === 'activa');
     
     if (activos.length === 0) {
-        alert('⚠️ No hay negocios activos para notificar');
+        alert('âš ï¸ No hay negocios activos para notificar');
         return;
     }
     
-    const mensaje = prompt(`📢 Notificar a ${activos.length} negocios activos:\n\nEscribe el mensaje que recibirán todos:`, 'Comunicado importante de Rservas');
+    const mensaje = prompt(`ðŸ“¢ Notificar a ${activos.length} negocios activos:\n\nEscribe el mensaje que recibirÃ¡n todos:`, 'Comunicado importante de Rservas');
     if (!mensaje) return;
     
     let enviados = 0;
@@ -887,7 +898,7 @@ async function notificarATodos() {
                 method: 'POST',
                 body: mensaje,
                 headers: { 
-                    'Title': '📢 Comunicado Rservas',
+                    'Title': 'ðŸ“¢ Comunicado Rservas',
                     'Priority': 'default'
                 }
             });
@@ -898,7 +909,7 @@ async function notificarATodos() {
             errores++;
         }
     }
-    alert(`✅ Notificaciones enviadas:\n📨 Enviados: ${enviados}\n❌ Errores: ${errores}\n📊 Total: ${activos.length}`);
+    alert(`âœ… Notificaciones enviadas:\nðŸ“¨ Enviados: ${enviados}\nâŒ Errores: ${errores}\nðŸ“Š Total: ${activos.length}`);
 }
 
 async function exportarCSV() {
@@ -917,7 +928,7 @@ async function exportarCSV() {
         );
     }
     
-    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Estado', 'Reservas Mes', 'Profesionales', 'Días Activo', 'Próximo Pago', 'Monto', 'Días para Renovar', 'Reservas Hoy'];
+    const headers = ['ID', 'Nombre', 'Email', 'TelÃ©fono', 'Estado', 'Reservas Mes', 'Profesionales', 'DÃ­as Activo', 'PrÃ³ximo Pago', 'Monto', 'DÃ­as para Renovar', 'Reservas Hoy'];
     const rows = resultados.map(n => [
         n.id, 
         n.nombre || '', 
@@ -947,7 +958,7 @@ async function exportarCSV() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    alert(`📥 Exportados ${resultados.length} negocios`);
+    alert(`ðŸ“¥ Exportados ${resultados.length} negocios`);
 }
 
 // ==================== FILTROS ====================
@@ -981,7 +992,7 @@ function actualizarListaNegocios() {
         resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
     }
     
-    // Luego aplicar búsqueda
+    // Luego aplicar bÃºsqueda
     if (filtroBusqueda) {
         resultados = resultados.filter(n => 
             (n.nombre && n.nombre.toLowerCase().includes(filtroBusqueda)) ||
@@ -1049,13 +1060,13 @@ function renderHeader() {
         <div class="max-w-7xl mx-auto p-4 md:p-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <div>
-                    <h1 class="text-2xl font-bold">👑 Super Admin Panel</h1>
-                    <p class="text-gray-600 text-sm">Gestión de negocios Rservas</p>
+                    <h1 class="text-2xl font-bold">ðŸ‘‘ Super Admin Panel</h1>
+                    <p class="text-gray-600 text-sm">GestiÃ³n de negocios Rservas</p>
                 </div>
                 <div class="flex gap-2 flex-wrap">
-                    <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">📥 Exportar CSV</button>
-                    <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Actualizar</button>
-                    <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">🚪 Cerrar Sesión</button>
+                    <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">ðŸ“¥ Exportar CSV</button>
+                    <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">ðŸ”„ Actualizar</button>
+                    <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">ðŸšª Cerrar SesiÃ³n</button>
                 </div>
             </div>
             
@@ -1063,7 +1074,7 @@ function renderHeader() {
                 <div class="px-6 py-5">
                     <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                         <div class="flex items-center gap-3">
-                            <div class="text-4xl md:text-5xl">📅</div>
+                            <div class="text-4xl md:text-5xl">ðŸ“…</div>
                             <div>
                                 <p class="text-purple-100 text-sm">RESERVAS SACADAS HOY</p>
                                 <p class="text-white text-xs opacity-80">${fechaActual}</p>
@@ -1076,7 +1087,7 @@ function renderHeader() {
                             <p class="text-purple-100 text-sm mt-1">reservas en total</p>
                         </div>
                         <div class="text-right">
-                            <p class="text-purple-100 text-xs">📊 Última actualización</p>
+                            <p class="text-purple-100 text-xs">ðŸ“Š Ãšltima actualizaciÃ³n</p>
                             <p class="text-white text-sm">${new Date().toLocaleTimeString()}</p>
                         </div>
                     </div>
@@ -1090,23 +1101,23 @@ function renderHeader() {
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow text-center">
                     <div class="text-2xl font-bold text-green-600">${stats.activos}</div>
-                    <div class="text-gray-600 text-xs">🟢 Activos</div>
+                    <div class="text-gray-600 text-xs">ðŸŸ¢ Activos</div>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow text-center">
                     <div class="text-2xl font-bold text-red-600">${stats.suspendidos}</div>
-                    <div class="text-gray-600 text-xs">🔴 Suspendidos</div>
+                    <div class="text-gray-600 text-xs">ðŸ”´ Suspendidos</div>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow text-center">
                     <div class="text-2xl font-bold text-yellow-600">${stats.trial}</div>
-                    <div class="text-gray-600 text-xs">🟡 En Prueba</div>
+                    <div class="text-gray-600 text-xs">ðŸŸ¡ En Prueba</div>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow text-center">
                     <div class="text-2xl font-bold text-purple-600">${stats.reservasMes}</div>
-                    <div class="text-gray-600 text-xs">📅 Reservas (mes)</div>
+                    <div class="text-gray-600 text-xs">ðŸ“… Reservas (mes)</div>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow text-center">
                     <div class="text-2xl font-bold text-orange-600">${stats.porVencer}</div>
-                    <div class="text-gray-600 text-xs">⚠️ Vencen 7d</div>
+                    <div class="text-gray-600 text-xs">âš ï¸ Vencen 7d</div>
                 </div>
             </div>
             
@@ -1119,36 +1130,36 @@ function renderHeader() {
                     </div>
                     <input type="text" 
                            id="buscador" 
-                           placeholder="🔍 Buscar por nombre o teléfono..."
+                           placeholder="ðŸ” Buscar por nombre o telÃ©fono..."
                            class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-base"
                            oninput="buscarNegocio(this.value)"
                            autocomplete="off">
                 </div>
-                <p class="text-xs text-gray-400 mt-1">💡 Busca por nombre o cualquier parte del teléfono</p>
+                <p class="text-xs text-gray-400 mt-1">ðŸ’¡ Busca por nombre o cualquier parte del telÃ©fono</p>
             </div>
             
             <div class="mb-4 flex flex-wrap gap-3 items-center">
                 <span class="text-sm text-gray-500 font-medium">Ordenar por:</span>
-                <button id="order-reservas" onclick="cambiarOrden('reservas')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-purple-600 text-white">🏆 Más reservas</button>
-                <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">📅 Más recientes</button>
+                <button id="order-reservas" onclick="cambiarOrden('reservas')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-purple-600 text-white">ðŸ† MÃ¡s reservas</button>
+                <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">ðŸ“… MÃ¡s recientes</button>
             </div>
             
             <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
                 <div class="flex gap-2 flex-wrap">
-                    <button onclick="notificarATodos()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">📢 Notificar a TODOS</button>
-                    <button onclick="notificarTurnosManana()" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">🔔 Turnos Mañana</button>
+                    <button onclick="notificarATodos()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">ðŸ“¢ Notificar a TODOS</button>
+                    <button onclick="notificarTurnosManana()" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">ðŸ”” Turnos MaÃ±ana</button>
                 </div>
-                <span class="text-xs text-gray-500">💰 ${PRECIO_MENSUAL} CUP/mes | ⏱️ +${DIAS_POR_DEFECTO} días</span>
+                <span class="text-xs text-gray-500">ðŸ’° ${PRECIO_MENSUAL} CUP/mes | â±ï¸ +${DIAS_POR_DEFECTO} dÃ­as</span>
             </div>
             
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
-                <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
-                <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">🟢 Activos (${totalPorEstado.activa})</button>
-                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
-                <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">🟡 Prueba (${totalPorEstado.trial})</button>
-                <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
-                <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
-                <button id="filtro-eliminados" onclick="filtrarPorEstado('eliminados')" class="px-3 py-1.5 rounded-lg text-sm bg-pink-100 text-pink-700">🗑️ Eliminados (${totalPorEstado.eliminados})</button>
+                <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">ðŸ“‹ Todos (${totalPorEstado.todos})</button>
+                <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">ðŸŸ¢ Activos (${totalPorEstado.activa})</button>
+                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">ðŸ”´ Suspendidos (${totalPorEstado.suspendida})</button>
+                <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">ðŸŸ¡ Prueba (${totalPorEstado.trial})</button>
+                <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">ðŸ‘€ Pendientes (${totalPorEstado.pendiente})</button>
+                <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">âš« Bajas (${totalPorEstado.inactiva})</button>
+                <button id="filtro-eliminados" onclick="filtrarPorEstado('eliminados')" class="px-3 py-1.5 rounded-lg text-sm bg-pink-100 text-pink-700">ðŸ—‘ï¸ Eliminados (${totalPorEstado.eliminados})</button>
             </div>
         </div>
     `;
@@ -1164,16 +1175,16 @@ function renderListaNegocios(negocios) {
     let html = `<div class="max-w-7xl mx-auto p-4 md:p-6 pt-0">`;
     
     if (filtroBusqueda) {
-        html += `<div class="mb-3 text-sm text-gray-500">🔍 Resultados para: "${filtroBusqueda}" (${negocios.length} encontrados)</div>`;
+        html += `<div class="mb-3 text-sm text-gray-500">ðŸ” Resultados para: "${filtroBusqueda}" (${negocios.length} encontrados)</div>`;
     }
     
     html += `<div class="grid gap-4">`;
     
     if (negocios.length === 0) {
         html += `<div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-                    <div class="text-5xl mb-3">🔍</div>
+                    <div class="text-5xl mb-3">ðŸ”</div>
                     <p class="text-lg">No se encontraron negocios</p>
-                    <button onclick="limpiarBusqueda()" class="mt-3 text-purple-600 hover:text-purple-800 underline">Limpiar búsqueda</button>
+                    <button onclick="limpiarBusqueda()" class="mt-3 text-purple-600 hover:text-purple-800 underline">Limpiar bÃºsqueda</button>
                 </div>`;
     }
     
@@ -1191,11 +1202,11 @@ function renderListaNegocios(negocios) {
         const carpetaCliente = buscarCarpetaCliente(n);
         
         const estadoConfig = {
-            'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
-            'suspendida': { color: 'border-red-500', text: '🔴 Suspendido', bg: 'bg-red-100 text-red-700' },
-            'trial': { color: 'border-yellow-500', text: '🟡 Prueba', bg: 'bg-yellow-100 text-yellow-700' },
-            'inactiva': { color: 'border-gray-500', text: '⚫ Inactivo', bg: 'bg-gray-100 text-gray-700' },
-            'pendiente': { color: 'border-purple-500', text: '👀 Pendiente', bg: 'bg-purple-100 text-purple-700' }
+            'activa': { color: 'border-green-500', text: 'ðŸŸ¢ Activo', bg: 'bg-green-100 text-green-700' },
+            'suspendida': { color: 'border-red-500', text: 'ðŸ”´ Suspendido', bg: 'bg-red-100 text-red-700' },
+            'trial': { color: 'border-yellow-500', text: 'ðŸŸ¡ Prueba', bg: 'bg-yellow-100 text-yellow-700' },
+            'inactiva': { color: 'border-gray-500', text: 'âš« Inactivo', bg: 'bg-gray-100 text-gray-700' },
+            'pendiente': { color: 'border-purple-500', text: 'ðŸ‘€ Pendiente', bg: 'bg-purple-100 text-purple-700' }
         };
         const ec = estadoConfig[n.estado_suscripcion] || estadoConfig.activa;
         
@@ -1212,20 +1223,20 @@ function renderListaNegocios(negocios) {
         
         // Mostrar un indicador visual si el negocio tiene muchas reservas
         const esTopReservas = ordenActual === 'reservas' && negocios.indexOf(n) < 3 && Number(n.reservas_mes) > 0;
-        const medallaTop = esTopReservas ? (negocios.indexOf(n) === 0 ? '🥇 ' : (negocios.indexOf(n) === 1 ? '🥈 ' : '🥉 ')) : '';
+        const medallaTop = esTopReservas ? (negocios.indexOf(n) === 0 ? 'ðŸ¥‡ ' : (negocios.indexOf(n) === 1 ? 'ðŸ¥ˆ ' : 'ðŸ¥‰ ')) : '';
         
         html += `
             <div class="bg-white rounded-lg shadow border-l-4 ${ec.color} p-4 fade-in flex flex-col">
                 <div class="flex flex-col md:flex-row justify-between items-start gap-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2 flex-wrap">
-                            <h2 class="font-bold text-lg">${medallaTop}🏢 ${nombreMostrado}</h2>
+                            <h2 class="font-bold text-lg">${medallaTop}ðŸ¢ ${nombreMostrado}</h2>
                             <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
-                            ${reservasHoy > 0 ? `<span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">📅 +${reservasHoy} hoy</span>` : ''}
-                            ${esEliminado ? `<span class="px-2 py-1 rounded-full text-xs bg-pink-100 text-pink-700 font-medium">🗑️ Eliminado</span>` : ''}
+                            ${reservasHoy > 0 ? `<span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">ðŸ“… +${reservasHoy} hoy</span>` : ''}
+                            ${esEliminado ? `<span class="px-2 py-1 rounded-full text-xs bg-pink-100 text-pink-700 font-medium">ðŸ—‘ï¸ Eliminado</span>` : ''}
                         </div>
-                        <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
-                        <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
+                        <p class="text-sm text-gray-600">ðŸ“§ ${n.email || 'No registrado'}</p>
+                        <p class="text-sm text-gray-600">ðŸ“± ${telefonoMostrado}</p>
                         ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">Abrir negocio (${urlLabel})</a></p>` : ''}
                         <p class="text-sm ${carpetaCliente ? 'text-emerald-700' : 'text-amber-700'}">Carpeta: ${carpetaCliente ? escapeHtml(carpetaCliente) : 'sin match automatico'}</p>
                     </div>
@@ -1233,62 +1244,62 @@ function renderListaNegocios(negocios) {
                 
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 text-sm border-t pt-3">
                     <div class="text-center">
-                        <div class="text-gray-500 text-xs">📊 Reservas (mes)</div>
+                        <div class="text-gray-500 text-xs">ðŸ“Š Reservas (mes)</div>
                         <div class="font-bold text-lg ${Number(n.reservas_mes) > 0 ? 'text-purple-600' : 'text-gray-400'}">${n.reservas_mes || 0}</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-gray-500 text-xs">👥 Profesionales</div>
+                        <div class="text-gray-500 text-xs">ðŸ‘¥ Profesionales</div>
                         <div class="font-bold text-lg">${n.profesionales_activas || 0}</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-gray-500 text-xs">📅 Antigüedad</div>
+                        <div class="text-gray-500 text-xs">ðŸ“… AntigÃ¼edad</div>
                         <div class="font-bold text-lg">${n.dias_activo || 0} d</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-gray-500 text-xs">💰 Monto mensual</div>
+                        <div class="text-gray-500 text-xs">ðŸ’° Monto mensual</div>
                         <div class="font-bold text-lg">${n.monto_ultimo_pago || PRECIO_MENSUAL}</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-gray-500 text-xs">🔥 Reservas hoy</div>
+                        <div class="text-gray-500 text-xs">ðŸ”¥ Reservas hoy</div>
                         <div class="font-bold text-lg ${reservasHoy > 0 ? 'text-orange-500' : 'text-gray-400'}">${reservasHoy}</div>
                     </div>
                 </div>
                 
                 <div class="flex flex-col md:flex-row justify-between text-xs mt-3 text-gray-500 gap-2 pb-3 border-b">
-                    <div>💳 Último pago: ${fechaUltimo}</div>
-                    <div class="${diasRestantes <= 3 && n.estado_suscripcion === 'activa' ? 'text-red-600 font-bold' : ''}">⏰ Próximo pago: ${fechaProximo} ${diasRestantes > 0 ? `(faltan ${diasRestantes} días)` : diasRestantes < 0 ? '(VENCIDO)' : ''}</div>
+                    <div>ðŸ’³ Ãšltimo pago: ${fechaUltimo}</div>
+                    <div class="${diasRestantes <= 3 && n.estado_suscripcion === 'activa' ? 'text-red-600 font-bold' : ''}">â° PrÃ³ximo pago: ${fechaProximo} ${diasRestantes > 0 ? `(faltan ${diasRestantes} dÃ­as)` : diasRestantes < 0 ? '(VENCIDO)' : ''}</div>
                 </div>
 
                 <div class="mt-3 flex flex-wrap gap-2">
                     <button onclick="window.togglePendiente('${n.id}')" class="${esPendiente ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
-                        ${esPendiente ? '✔️ Quitar Pendiente' : '👀 Marcar Pendiente'}
+                        ${esPendiente ? 'âœ”ï¸ Quitar Pendiente' : 'ðŸ‘€ Marcar Pendiente'}
                     </button>
-                    ${n.estado_suscripcion === 'trial' ? `<button onclick="window.activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">✅ Activar</button>` : ''}
-                    ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">▶️ Reactivar</button>` : ''}
-                    ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
+                    ${n.estado_suscripcion === 'trial' ? `<button onclick="window.activarDesdeTrial('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">âœ… Activar</button>` : ''}
+                    ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">â–¶ï¸ Reactivar</button>` : ''}
+                    ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">â¸ï¸ Suspender</button>` : ''}
                     
-                    <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
+                    <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">ðŸ“… Extender</button>
 
                     <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar app</button>
                     
                     <div class="flex flex-col gap-1">
-                        <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
+                        <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">ðŸ’¬ Soporte</button>
                         ${ultimoSoporte ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoSoporte}</span>` : ''}
                     </div>
                     
                     <div class="flex flex-col gap-1">
-                        <button onclick="window.enviarWhatsAppSimple('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💚 WhatsApp Hola</button>
+                        <button onclick="window.enviarWhatsAppSimple('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">ðŸ’š WhatsApp Hola</button>
                         ${ultimoHola ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoHola}</span>` : ''}
                     </div>
                     
-                    <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🔔 Notificar</button>
+                    <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">ðŸ”” Notificar</button>
                     
-                    <button onclick="window.notificarVencimiento(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⚠️ Avisar Vencimiento</button>
+                    <button onclick="window.notificarVencimiento(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">âš ï¸ Avisar Vencimiento</button>
                     
-                    <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🗑️ Baja</button>
+                    <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">ðŸ—‘ï¸ Baja</button>
                     
                     <button onclick="window.toggleEliminado('${n.id}')" class="${esEliminado ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-100 text-pink-700 hover:bg-pink-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
-                        ${esEliminado ? '👁️ Mostrar en Principal' : '🙈 Ocultar de Vista'}
+                        ${esEliminado ? 'ðŸ‘ï¸ Mostrar en Principal' : 'ðŸ™ˆ Ocultar de Vista'}
                     </button>
                 </div>
             </div>
@@ -1305,12 +1316,12 @@ function renderListaNegocios(negocios) {
 
 // ==================== FUNCIONES DE UI ====================
 async function logout() {
-    if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+    if (confirm('Â¿EstÃ¡s seguro de que quieres cerrar sesiÃ³n?')) {
         try {
             await window.supabase.auth.signOut();
             window.location.href = 'login.html';
         } catch (error) {
-            console.error('Error al cerrar sesión:', error);
+            console.error('Error al cerrar sesiÃ³n:', error);
             window.location.href = 'login.html';
         }
     }
@@ -1342,7 +1353,7 @@ function toggleEliminado(id) {
     
     localStorage.setItem('eliminados_admin', JSON.stringify(eliminadosLocal));
     
-    // Si estamos en la vista de eliminados y quitamos el último, volver a todos
+    // Si estamos en la vista de eliminados y quitamos el Ãºltimo, volver a todos
     if (filtroActual === 'eliminados' && eliminadosLocal.length === 0) {
         filtroActual = 'todos';
     }
@@ -1366,7 +1377,7 @@ async function notificarTurnosManana() {
     const elegibles = negociosData.filter(n => n.estado_suscripcion === 'activa' || n.estado_suscripcion === 'trial');
     
     if (elegibles.length === 0) {
-        alert('⚠️ No hay negocios activos o en prueba.');
+        alert('âš ï¸ No hay negocios activos o en prueba.');
         return;
     }
 
@@ -1379,14 +1390,14 @@ async function notificarTurnosManana() {
     const day = String(manana.getDate()).padStart(2, '0');
     const mananaSQL = `${year}-${month}-${day}`;
     
-    const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const dias = ['domingo', 'lunes', 'martes', 'miÃ©rcoles', 'jueves', 'viernes', 'sÃ¡bado'];
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     const diaSemana = dias[manana.getDay()];
     const diaSemanaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
     const fechaLegible = `${diaSemanaCapitalizado} ${manana.getDate()} de ${meses[manana.getMonth()]} de ${year}`;
 
     try {
-        // 2. Traer SOLO los turnos de mañana que estén "Reservados"
+        // 2. Traer SOLO los turnos de maÃ±ana que estÃ©n "Reservados"
         const { data: turnos, error } = await window.supabase
             .from('reservas')
             .select('negocio_id, cliente_nombre, cliente_whatsapp, servicio, profesional_nombre, hora_inicio')
@@ -1396,7 +1407,7 @@ async function notificarTurnosManana() {
         if (error) throw error;
 
         if (!turnos || turnos.length === 0) {
-            alert('No hay NINGÚN turno registrado para el día de mañana en todo el sistema.');
+            alert('No hay NINGÃšN turno registrado para el dÃ­a de maÃ±ana en todo el sistema.');
             return;
         }
 
@@ -1411,17 +1422,17 @@ async function notificarTurnosManana() {
         const negociosConTurnos = elegibles.filter(neg => turnosPorNegocio[neg.id] && turnosPorNegocio[neg.id].length > 0);
 
         if (negociosConTurnos.length === 0) {
-            alert('Ninguno de los negocios activos tiene turnos para mañana.');
+            alert('Ninguno de los negocios activos tiene turnos para maÃ±ana.');
             return;
         }
 
-        if (!confirm(`🔔 ¿Notificar turnos a los ${negociosConTurnos.length} negocios que SÍ tienen reservas mañana?\n\n(Se han descartado los que tienen la agenda vacía para ahorrar tiempo)`)) return;
+        if (!confirm(`ðŸ”” Â¿Notificar turnos a los ${negociosConTurnos.length} negocios que SÃ tienen reservas maÃ±ana?\n\n(Se han descartado los que tienen la agenda vacÃ­a para ahorrar tiempo)`)) return;
 
         const btnNotificar = document.querySelector('button[onclick="notificarTurnosManana()"]');
-        const textoOriginalBtn = btnNotificar ? btnNotificar.innerHTML : '🔔 Turnos Mañana';
-        if (btnNotificar) btnNotificar.innerHTML = `⏳ Procesando 0/${negociosConTurnos.length}...`;
+        const textoOriginalBtn = btnNotificar ? btnNotificar.innerHTML : 'ðŸ”” Turnos MaÃ±ana';
+        if (btnNotificar) btnNotificar.innerHTML = `â³ Procesando 0/${negociosConTurnos.length}...`;
 
-        // 4. Buscar solo los topics de los negocios que sí tienen turnos
+        // 4. Buscar solo los topics de los negocios que sÃ­ tienen turnos
         const { data: topicsData } = await window.supabase
             .from('negocios')
             .select('id, ntfy_topic')
@@ -1437,10 +1448,10 @@ async function notificarTurnosManana() {
         let negociosSinTopic = [];
         let procesados = 0;
 
-        // 5. Procesar únicamente la lista limpia
+        // 5. Procesar Ãºnicamente la lista limpia
         for (const neg of negociosConTurnos) {
             procesados++;
-            if (btnNotificar) btnNotificar.innerHTML = `⏳ Enviando ${procesados}/${negociosConTurnos.length}...`;
+            if (btnNotificar) btnNotificar.innerHTML = `â³ Enviando ${procesados}/${negociosConTurnos.length}...`;
 
             const turnosNegocio = turnosPorNegocio[neg.id];
             turnosNegocio.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
@@ -1456,7 +1467,7 @@ async function notificarTurnosManana() {
 
             temasUsados.add(ntfyTopic);
 
-            const tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para mañana`;
+            const tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para maÃ±ana`;
             
             const porProfesional = {};
             const porServicio = {};
@@ -1468,7 +1479,7 @@ async function notificarTurnosManana() {
                 porServicio[servicio] = (porServicio[servicio] || 0) + 1;
             });
 
-            let cuerpoMensaje = `🌟 *${neg.nombre}*\n📅 ${fechaLegible}\n📊 Total: ${turnosNegocio.length} turno${turnosNegocio.length !== 1 ? 's' : ''}\n━━━━━━━━━━━━━━━━━━━━━\n`;
+            let cuerpoMensaje = `ðŸŒŸ *${neg.nombre}*\nðŸ“… ${fechaLegible}\nðŸ“Š Total: ${turnosNegocio.length} turno${turnosNegocio.length !== 1 ? 's' : ''}\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n`;
             
             turnosNegocio.forEach((turno, index) => {
                 const hora = formatTo12Hour(turno.hora_inicio);
@@ -1476,26 +1487,26 @@ async function notificarTurnosManana() {
                 const servicio = turno.servicio || '?';
                 
                 cuerpoMensaje += `${index + 1}. ${hora} | ${turno.cliente_nombre}\n`;
-                cuerpoMensaje += `   💅 ${servicio} | 👩‍🎨 ${profesional}\n`;
-                cuerpoMensaje += `   📱 ${turno.cliente_whatsapp || '---'}\n`;
+                cuerpoMensaje += `   ðŸ’… ${servicio} | ðŸ‘©â€ðŸŽ¨ ${profesional}\n`;
+                cuerpoMensaje += `   ðŸ“± ${turno.cliente_whatsapp || '---'}\n`;
                 if (index < turnosNegocio.length - 1) cuerpoMensaje += `\n`;
             });
 
             if (Object.keys(porProfesional).length > 0) {
-                cuerpoMensaje += `\n━━━━━━━━━━━━━━━━━━━━━\n📊 *Por profesional:*\n`;
+                cuerpoMensaje += `\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\nðŸ“Š *Por profesional:*\n`;
                 for (const [prof, count] of Object.entries(porProfesional)) {
-                    cuerpoMensaje += `• ${prof}: ${count}\n`;
+                    cuerpoMensaje += `â€¢ ${prof}: ${count}\n`;
                 }
             }
             
             if (Object.keys(porServicio).length > 0) {
-                cuerpoMensaje += `\n📊 *Por servicio:*\n`;
+                cuerpoMensaje += `\nðŸ“Š *Por servicio:*\n`;
                 for (const [serv, count] of Object.entries(porServicio)) {
-                    cuerpoMensaje += `• ${serv}: ${count}\n`;
+                    cuerpoMensaje += `â€¢ ${serv}: ${count}\n`;
                 }
             }
             
-            cuerpoMensaje += `\n💖 *${neg.nombre}*`;
+            cuerpoMensaje += `\nðŸ’– *${neg.nombre}*`;
 
             const tituloLimpio = tituloMensaje.replace(/[^\x00-\x7F]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -1512,7 +1523,7 @@ async function notificarTurnosManana() {
                 
                 if (resp.ok) enviados++; else errores++;
                 
-                // Mantenemos 2.5s pero como son muchos menos negocios, terminará rapidísimo
+                // Mantenemos 2.5s pero como son muchos menos negocios, terminarÃ¡ rapidÃ­simo
                 await new Promise(r => setTimeout(r, 2500)); 
                 
             } catch(e) { 
@@ -1523,18 +1534,18 @@ async function notificarTurnosManana() {
         if (btnNotificar) btnNotificar.innerHTML = textoOriginalBtn;
 
         const canalesFinales = Array.from(temasUsados);
-        let reporteFinal = `✅ Proceso finalizado:\n📨 Enviados a NTFY: ${enviados}\n❌ Errores: ${errores}\n\n📡 Canales contactados (${canalesFinales.length}):\n${canalesFinales.join(', ')}`;
+        let reporteFinal = `âœ… Proceso finalizado:\nðŸ“¨ Enviados a NTFY: ${enviados}\nâŒ Errores: ${errores}\n\nðŸ“¡ Canales contactados (${canalesFinales.length}):\n${canalesFinales.join(', ')}`;
         
         if (negociosSinTopic.length > 0) {
-            console.warn("⚠️ Negocios sin ntfy_topic configurado:", negociosSinTopic);
+            console.warn("âš ï¸ Negocios sin ntfy_topic configurado:", negociosSinTopic);
         }
 
         alert(reporteFinal);
         
     } catch (error) {
         const btnNotificar = document.querySelector('button[onclick="notificarTurnosManana()"]');
-        if (btnNotificar) btnNotificar.innerHTML = '🔔 Turnos Mañana';
-        alert('❌ Error general: ' + error.message);
+        if (btnNotificar) btnNotificar.innerHTML = 'ðŸ”” Turnos MaÃ±ana';
+        alert('âŒ Error general: ' + error.message);
     }
 }
 
@@ -1560,16 +1571,16 @@ window.togglePendiente = togglePendiente;
 window.toggleEliminado = toggleEliminado;
 window.notificarTurnosManana = notificarTurnosManana;
 
-// ==================== INICIALIZACIÓN ====================
+// ==================== INICIALIZACIÃ“N ====================
 async function init() {
-    console.log('🚀 Inicializando panel Super Admin...');
+    console.log('ðŸš€ Inicializando panel Super Admin...');
     
     // Mostrar loading
     const panelHeader = document.getElementById('panel-header');
     const listaNegocios = document.getElementById('lista-negocios');
     
     if (panelHeader) {
-        panelHeader.innerHTML = `<div class="text-center p-8"><div class="text-2xl">👑</div><p class="mt-2">Verificando acceso...</p></div>`;
+        panelHeader.innerHTML = `<div class="text-center p-8"><div class="text-2xl">ðŸ‘‘</div><p class="mt-2">Verificando acceso...</p></div>`;
     }
     if (listaNegocios) {
         listaNegocios.innerHTML = `<div class="text-center p-8">Cargando panel...</div>`;
@@ -1590,7 +1601,7 @@ async function init() {
             panelHeader.innerHTML = `
                 <div class="max-w-7xl mx-auto p-4">
                     <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg">
-                        <p class="font-bold">⚠️ No se encontraron negocios</p>
+                        <p class="font-bold">âš ï¸ No se encontraron negocios</p>
                         <p>Verifica que la tabla 'vista_negocios_admin' exista en Supabase y contenga datos.</p>
                         <button onclick="location.reload()" class="mt-2 bg-yellow-600 text-white px-3 py-1 rounded text-sm">Reintentar</button>
                     </div>
@@ -1610,7 +1621,7 @@ async function init() {
     actualizarBotonOrden();
 }
 
-// Iniciar cuando el DOM esté listo
+// Iniciar cuando el DOM estÃ© listo
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
