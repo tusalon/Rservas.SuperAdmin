@@ -7,6 +7,14 @@ const NTFY_TOPIC_GLOBAL = "rservas-vencimientos";
 const ADMIN_EMAIL = "rservasroma@gmail.com";
 const CLIENTES_ROOT_LOCAL = "C:\\Users\\RODO\\Documents\\ClientesRservas";
 const AUTOMATION_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\New project";
+const NEGOCIOS_RECTIFICADOS = {
+    "742405d7-292e-424a-bd63-f6e6b09fd7d5": {
+        carpeta_local: "ketycasalon",
+        slug_local: "ketycasalon",
+        ntfy_topic: "ketycas-salon",
+        sitio_web: "https://tusalon.github.io/ketycasalon/"
+    }
+};
 const CARPETAS_CLIENTES = [
     "-amynails",
     "acrykanails",
@@ -248,9 +256,11 @@ const CARPETAS_CLIENTES = [
 let filtroActual = "todos";
 let filtroBusqueda = "";
 let negociosData = [];
-let ordenActual = "reservas"; // 'reservas' o 'fecha'
+let ordenActual = "reservas"; // 'reservas', 'semana' o 'fecha'
 let reservasDiarias = 0;
 let reservasDiariasData = [];
+let reservasSemanaData = [];
+let ultimaCitaPorNegocio = {};
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
 let ultimaVezEscrito = JSON.parse(localStorage.getItem('ultima_vez_escrito')) || {};
@@ -330,17 +340,22 @@ async function cargarNegocios() {
         if (idsNegocios.length > 0) {
             const { data: datosUrl, error: errorUrl } = await window.supabase
                 .from('negocios')
-                .select('id,sitio_web')
+                .select('id,sitio_web,ntfy_topic')
                 .in('id', idsNegocios);
 
             if (errorUrl) {
                 console.warn('No se pudieron cargar las URLs de los negocios:', errorUrl);
             } else if (datosUrl) {
-                const urlsPorId = Object.fromEntries(datosUrl.map(n => [n.id, n.sitio_web]));
-                unique = unique.map(n => ({ ...n, sitio_web: urlsPorId[n.id] || n.sitio_web || '' }));
+                const extrasPorId = Object.fromEntries(datosUrl.map(n => [n.id, n]));
+                unique = unique.map(n => ({
+                    ...n,
+                    sitio_web: extrasPorId[n.id]?.sitio_web || n.sitio_web || '',
+                    ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || ''
+                }));
             }
         }
 
+        unique = unique.map(aplicarRectificacionNegocio);
         negociosData = unique;
         console.log(`✅ ${unique.length} negocios cargados`);
         return unique;
@@ -355,6 +370,72 @@ async function cargarNegocios() {
 function getReservasDiariasPorNegocio(negocioId) {
     if (!negocioId) return 0;
     return reservasDiariasData.filter(r => r.negocio_id === negocioId).length;
+}
+
+async function obtenerActividadReservas() {
+    try {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        const hace7 = new Date(hoy);
+        hace7.setDate(hace7.getDate() - 6);
+        const fechaInicioSemana = hace7.toISOString().split('T')[0];
+        const fechaHoy = hoy.toISOString().split('T')[0];
+
+        const { data: semana, error: errorSemana } = await window.supabase
+            .from('reservas')
+            .select('negocio_id, fecha, hora_inicio, estado')
+            .gte('fecha', fechaInicioSemana)
+            .lte('fecha', fechaHoy);
+
+        if (errorSemana) {
+            console.warn('Error al obtener reservas de la ultima semana:', errorSemana);
+        }
+
+        const { data: ultimas, error: errorUltimas } = await window.supabase
+            .from('reservas')
+            .select('negocio_id, fecha, hora_inicio, estado')
+            .lte('fecha', fechaHoy)
+            .order('fecha', { ascending: false })
+            .order('hora_inicio', { ascending: false })
+            .limit(5000);
+
+        if (errorUltimas) {
+            console.warn('Error al obtener ultima cita por negocio:', errorUltimas);
+        }
+
+        reservasSemanaData = semana || [];
+        ultimaCitaPorNegocio = {};
+
+        (ultimas || []).forEach(reserva => {
+            if (reserva.negocio_id && !ultimaCitaPorNegocio[reserva.negocio_id]) {
+                ultimaCitaPorNegocio[reserva.negocio_id] = reserva;
+            }
+        });
+    } catch (error) {
+        console.error('Error obteniendo actividad de reservas:', error);
+        reservasSemanaData = [];
+        ultimaCitaPorNegocio = {};
+    }
+}
+
+function getReservasSemanaPorNegocio(negocioId) {
+    if (!negocioId) return 0;
+    return reservasSemanaData.filter(r => r.negocio_id === negocioId).length;
+}
+
+function formatearUltimaCita(negocioId) {
+    const cita = ultimaCitaPorNegocio[negocioId];
+    if (!cita?.fecha) return 'Sin citas registradas';
+
+    const fecha = new Date(`${cita.fecha}T00:00:00`);
+    const fechaTexto = fecha.toLocaleDateString('es-ES', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short'
+    });
+    const horaTexto = cita.hora_inicio ? ` ${formatTo12Hour(cita.hora_inicio)}` : '';
+    return `${fechaTexto}${horaTexto}`;
 }
 
 function escapeHtml(value) {
@@ -414,6 +495,11 @@ function normalizarParaMatch(value) {
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '');
+}
+
+function aplicarRectificacionNegocio(negocio) {
+    const rectificacion = NEGOCIOS_RECTIFICADOS[negocio?.id];
+    return rectificacion ? { ...negocio, ...rectificacion } : negocio;
 }
 
 function agregarCandidatoCarpeta(candidatos, value) {
@@ -560,13 +646,14 @@ function calcularEstadisticas(negocios) {
     const suspendidos = negocios.filter(n => n.estado_suscripcion === 'suspendida').length;
     const trial = negocios.filter(n => n.estado_suscripcion === 'trial').length;
     const reservasMes = negocios.reduce((sum, n) => sum + (Number(n.reservas_mes) || 0), 0);
+    const reservasSemana = negocios.reduce((sum, n) => sum + getReservasSemanaPorNegocio(n.id), 0);
     const ingresos = negocios.filter(n => n.estado_suscripcion === 'activa').reduce((sum, n) => sum + PRECIO_MENSUAL, 0);
     const porVencer = negocios.filter(n => {
         const dias = n.dias_para_renovar;
         return dias !== null && dias <= 7 && dias > 0 && n.estado_suscripcion === 'activa';
     }).length;
     
-    return { total, activos, suspendidos, trial, reservasMes, ingresos, porVencer };
+    return { total, activos, suspendidos, trial, reservasMes, reservasSemana, ingresos, porVencer };
 }
 
 function calcularFechaMasDias(dias) {
@@ -589,6 +676,20 @@ function ordenarNegocios(negocios, orden) {
             // Si hay empate, ordenar por nombre
             return (a.nombre || '').localeCompare(b.nombre || '');
         });
+    } else if (orden === 'semana') {
+        negociosOrdenados.sort((a, b) => {
+            const reservasA = getReservasSemanaPorNegocio(a.id);
+            const reservasB = getReservasSemanaPorNegocio(b.id);
+            if (reservasB !== reservasA) {
+                return reservasB - reservasA;
+            }
+            const ultimaA = ultimaCitaPorNegocio[a.id]?.fecha || '';
+            const ultimaB = ultimaCitaPorNegocio[b.id]?.fecha || '';
+            if (ultimaB !== ultimaA) {
+                return ultimaB.localeCompare(ultimaA);
+            }
+            return (a.nombre || '').localeCompare(b.nombre || '');
+        });
     } else {
         negociosOrdenados.sort((a, b) => {
             const fechaA = a.fecha_registro ? new Date(a.fecha_registro) : new Date(0);
@@ -607,22 +708,17 @@ function cambiarOrden(orden) {
 }
 
 function actualizarBotonOrden() {
-    const btnReservas = document.getElementById('order-reservas');
-    const btnFecha = document.getElementById('order-fecha');
-    
-    if (btnReservas && btnFecha) {
-        if (ordenActual === 'reservas') {
-            btnReservas.classList.add('active', 'bg-purple-600', 'text-white');
-            btnReservas.classList.remove('bg-gray-200', 'text-gray-700');
-            btnFecha.classList.remove('active', 'bg-purple-600', 'text-white');
-            btnFecha.classList.add('bg-gray-200', 'text-gray-700');
+    ['reservas', 'semana', 'fecha'].forEach(orden => {
+        const btn = document.getElementById(`order-${orden}`);
+        if (!btn) return;
+
+        btn.classList.remove('active', 'bg-purple-600', 'text-white', 'bg-gray-200', 'text-gray-700');
+        if (ordenActual === orden) {
+            btn.classList.add('active', 'bg-purple-600', 'text-white');
         } else {
-            btnFecha.classList.add('active', 'bg-purple-600', 'text-white');
-            btnFecha.classList.remove('bg-gray-200', 'text-gray-700');
-            btnReservas.classList.remove('active', 'bg-purple-600', 'text-white');
-            btnReservas.classList.add('bg-gray-200', 'text-gray-700');
+            btn.classList.add('bg-gray-200', 'text-gray-700');
         }
-    }
+    });
 }
 
 // ==================== ACCIONES ====================
@@ -748,6 +844,69 @@ async function extenderFechaPago(id, nombreNegocio) {
 }
 
 // FUNCIÓN WHATSAPP ORIGINAL (con mensaje de soporte)
+function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
+    const fechaBase = fechaActual || calcularFechaMasDias(DIAS_POR_DEFECTO);
+    const modalExistente = document.getElementById('modal-pagado-hasta');
+    if (modalExistente) modalExistente.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-pagado-hasta';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">Pagado hasta</h3>
+                    <p class="text-sm text-gray-500">${escapeHtml(nombreNegocio)}</p>
+                </div>
+                <button type="button" onclick="document.getElementById('modal-pagado-hasta')?.remove()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de vencimiento</label>
+            <input id="pagado-hasta-fecha" type="date" value="${fechaBase}" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+            <label class="block text-sm font-medium text-gray-700 mt-4 mb-1">Monto pagado CUP</label>
+            <input id="pagado-hasta-monto" type="number" min="1" step="1" value="${PRECIO_MENSUAL}" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+            <p class="text-xs text-gray-500 mt-2">Ejemplo: si eliges septiembre 25, el negocio queda pagado hasta ese dia.</p>
+            <div class="flex gap-2 mt-5">
+                <button type="button" onclick="document.getElementById('modal-pagado-hasta')?.remove()" class="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">Cancelar</button>
+                <button type="button" onclick="window.guardarPagadoHasta('${id}')" class="flex-1 px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700">Guardar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function guardarPagadoHasta(id) {
+    const fecha = document.getElementById('pagado-hasta-fecha')?.value;
+    const monto = parseFloat(document.getElementById('pagado-hasta-monto')?.value || PRECIO_MENSUAL);
+
+    if (!fecha) {
+        alert('Selecciona una fecha valida');
+        return;
+    }
+    if (Number.isNaN(monto) || monto <= 0) {
+        alert('Ingresa un monto valido');
+        return;
+    }
+
+    try {
+        const { error } = await window.supabase
+            .from('suscripciones')
+            .update({
+                fecha_renovacion: fecha,
+                monto_ultimo_pago: monto,
+                fecha_ultimo_pago: new Date().toISOString()
+            })
+            .eq('negocio_id', id);
+
+        if (error) throw error;
+        document.getElementById('modal-pagado-hasta')?.remove();
+        alert(`Pago actualizado. Pagado hasta: ${fecha}`);
+        location.reload();
+    } catch (error) {
+        alert('Error actualizando pago: ' + error.message);
+    }
+}
+
 function enviarWhatsApp(telefono, nombreNegocio, negocioId) {
     if (!telefono || telefono === 'No registrado' || telefono === '') {
         alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
@@ -878,9 +1037,12 @@ async function notificarVencimiento(negocio) {
 }
 
 async function notificarATodos() {
-    const activos = negociosData.filter(n => n.estado_suscripcion === 'activa');
+    const topicsUnicos = Array.from(new Map(
+        negociosData.map(n => [(n.ntfy_topic || NTFY_TOPIC_GLOBAL).trim(), n])
+    ).entries()).filter(([tema]) => Boolean(tema));
+    const activos = { length: topicsUnicos.length };
     
-    if (activos.length === 0) {
+    if (topicsUnicos.length === 0) {
         alert('⚠️ No hay negocios activos para notificar');
         return;
     }
@@ -888,11 +1050,12 @@ async function notificarATodos() {
     const mensaje = prompt(`📢 Notificar a ${activos.length} negocios activos:\n\nEscribe el mensaje que recibirán todos:`, 'Comunicado importante de Rservas');
     if (!mensaje) return;
     
+    if (!confirm(`Enviar este mensaje a ${topicsUnicos.length} canales ntfy?\n\n${mensaje}`)) return;
+
     let enviados = 0;
     let errores = 0;
     
-    for (const neg of activos) {
-        const tema = neg.ntfy_topic || NTFY_TOPIC_GLOBAL;
+    for (const [tema] of topicsUnicos) {
         try {
             const response = await fetch(`https://ntfy.sh/${tema}`, {
                 method: 'POST',
@@ -1116,7 +1279,7 @@ function renderHeader() {
                     <div class="text-gray-600 text-xs">📅 Reservas (mes)</div>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-orange-600">${stats.porVencer}</div>
+                    <div class="text-2xl font-bold text-orange-600">${stats.reservasSemana}</div>
                     <div class="text-gray-600 text-xs">⚠️ Vencen 7d</div>
                 </div>
             </div>
@@ -1140,6 +1303,7 @@ function renderHeader() {
             
             <div class="mb-4 flex flex-wrap gap-3 items-center">
                 <span class="text-sm text-gray-500 font-medium">Ordenar por:</span>
+                <button id="order-semana" onclick="cambiarOrden('semana')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">Ultima semana</button>
                 <button id="order-reservas" onclick="cambiarOrden('reservas')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-purple-600 text-white">🏆 Más reservas</button>
                 <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">📅 Más recientes</button>
             </div>
@@ -1188,7 +1352,7 @@ function renderListaNegocios(negocios) {
                 </div>`;
     }
     
-    negocios.forEach(n => {
+    negocios.forEach((n, index) => {
         const fechaProximo = n.proximo_pago ? new Date(n.proximo_pago).toLocaleDateString() : 'No definido';
         const fechaUltimo = n.fecha_ultimo_pago ? new Date(n.fecha_ultimo_pago).toLocaleDateString() : 'No registrado';
         const diasRestantes = n.dias_para_renovar || 0;
@@ -1222,7 +1386,8 @@ function renderListaNegocios(negocios) {
         }
         
         // Mostrar un indicador visual si el negocio tiene muchas reservas
-        const esTopReservas = ordenActual === 'reservas' && negocios.indexOf(n) < 3 && Number(n.reservas_mes) > 0;
+        const posicionRanking = index + 1;
+        const esTopReservas = ordenActual === 'reservas' && index < 3 && Number(n.reservas_mes) > 0;
         const medallaTop = esTopReservas ? (negocios.indexOf(n) === 0 ? '🥇 ' : (negocios.indexOf(n) === 1 ? '🥈 ' : '🥉 ')) : '';
         
         html += `
@@ -1231,6 +1396,7 @@ function renderListaNegocios(negocios) {
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2 flex-wrap">
                             <h2 class="font-bold text-lg">${medallaTop}🏢 ${nombreMostrado}</h2>
+                            ${ordenActual === 'reservas' ? `<span class="px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700 font-bold">Lugar #${posicionRanking}</span>` : ''}
                             <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
                             ${reservasHoy > 0 ? `<span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">📅 +${reservasHoy} hoy</span>` : ''}
                             ${esEliminado ? `<span class="px-2 py-1 rounded-full text-xs bg-pink-100 text-pink-700 font-medium">🗑️ Eliminado</span>` : ''}
@@ -1242,10 +1408,11 @@ function renderListaNegocios(negocios) {
                     </div>
                 </div>
                 
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 text-sm border-t pt-3">
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-4 text-sm border-t pt-3">
                     <div class="text-center">
                         <div class="text-gray-500 text-xs">📊 Reservas (mes)</div>
                         <div class="font-bold text-lg ${Number(n.reservas_mes) > 0 ? 'text-purple-600' : 'text-gray-400'}">${n.reservas_mes || 0}</div>
+                        ${ordenActual === 'reservas' ? `<div class="text-xs text-purple-500 font-semibold">#${posicionRanking} en reservas</div>` : ''}
                     </div>
                     <div class="text-center">
                         <div class="text-gray-500 text-xs">👥 Profesionales</div>
@@ -1263,9 +1430,14 @@ function renderListaNegocios(negocios) {
                         <div class="text-gray-500 text-xs">🔥 Reservas hoy</div>
                         <div class="font-bold text-lg ${reservasHoy > 0 ? 'text-orange-500' : 'text-gray-400'}">${reservasHoy}</div>
                     </div>
+                    <div class="text-center">
+                        <div class="text-gray-500 text-xs">Ult. 7 dias</div>
+                        <div class="font-bold text-lg ${getReservasSemanaPorNegocio(n.id) > 0 ? 'text-emerald-600' : 'text-gray-400'}">${getReservasSemanaPorNegocio(n.id)}</div>
+                    </div>
                 </div>
                 
                 <div class="flex flex-col md:flex-row justify-between text-xs mt-3 text-gray-500 gap-2 pb-3 border-b">
+                    <div>Ultima cita: ${formatearUltimaCita(n.id)}</div>
                     <div>💳 Último pago: ${fechaUltimo}</div>
                     <div class="${diasRestantes <= 3 && n.estado_suscripcion === 'activa' ? 'text-red-600 font-bold' : ''}">⏰ Próximo pago: ${fechaProximo} ${diasRestantes > 0 ? `(faltan ${diasRestantes} días)` : diasRestantes < 0 ? '(VENCIDO)' : ''}</div>
                 </div>
@@ -1279,6 +1451,8 @@ function renderListaNegocios(negocios) {
                     ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
                     
                     <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
+
+                    <button onclick="window.abrirModalPagadoHasta('${n.id}', '${n.nombre.replace(/'/g, "\\'")}', '${n.proximo_pago || ''}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Pagado hasta</button>
 
                     <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar app</button>
                     
@@ -1564,6 +1738,8 @@ window.notificarNegocio = notificarNegocio;
 window.notificarVencimiento = notificarVencimiento;  
 window.prepararActualizacionNegocio = prepararActualizacionNegocio;
 window.notificarATodos = notificarATodos;
+window.abrirModalPagadoHasta = abrirModalPagadoHasta;
+window.guardarPagadoHasta = guardarPagadoHasta;
 window.exportarCSV = exportarCSV;
 window.logout = logout;
 window.cambiarOrden = cambiarOrden;
@@ -1592,6 +1768,7 @@ async function init() {
     
     // Obtener reservas diarias
     reservasDiarias = await obtenerReservasDiarias();
+    await obtenerActividadReservas();
     
     // Cargar negocios
     const negocios = await cargarNegocios();
@@ -1627,4 +1804,3 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
-
