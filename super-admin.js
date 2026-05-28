@@ -261,6 +261,7 @@ let reservasDiarias = 0;
 let reservasDiariasData = [];
 let reservasSemanaData = [];
 let ultimaCitaPorNegocio = {};
+let actividadReservasCargada = false;
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
 let ultimaVezEscrito = JSON.parse(localStorage.getItem('ultima_vez_escrito')) || {};
@@ -316,6 +317,10 @@ async function cargarNegocios() {
     try {
         console.log('🔄 Cargando negocios...');
         
+        const extrasPromise = window.supabase
+            .from('negocios')
+            .select('id,sitio_web,ntfy_topic');
+
         const { data, error } = await window.supabase
             .from('vista_negocios_admin')
             .select('*')
@@ -336,23 +341,16 @@ async function cargarNegocios() {
             index === self.findIndex(t => t.id === item.id)
         );
         
-        const idsNegocios = unique.map(n => n.id).filter(Boolean);
-        if (idsNegocios.length > 0) {
-            const { data: datosUrl, error: errorUrl } = await window.supabase
-                .from('negocios')
-                .select('id,sitio_web,ntfy_topic')
-                .in('id', idsNegocios);
-
-            if (errorUrl) {
-                console.warn('No se pudieron cargar las URLs de los negocios:', errorUrl);
-            } else if (datosUrl) {
-                const extrasPorId = Object.fromEntries(datosUrl.map(n => [n.id, n]));
-                unique = unique.map(n => ({
-                    ...n,
-                    sitio_web: extrasPorId[n.id]?.sitio_web || n.sitio_web || '',
-                    ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || ''
-                }));
-            }
+        const { data: datosUrl, error: errorUrl } = await extrasPromise;
+        if (errorUrl) {
+            console.warn('No se pudieron cargar las URLs de los negocios:', errorUrl);
+        } else if (datosUrl) {
+            const extrasPorId = Object.fromEntries(datosUrl.map(n => [n.id, n]));
+            unique = unique.map(n => ({
+                ...n,
+                sitio_web: extrasPorId[n.id]?.sitio_web || n.sitio_web || '',
+                ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || ''
+            }));
         }
 
         unique = unique.map(aplicarRectificacionNegocio);
@@ -372,8 +370,9 @@ function getReservasDiariasPorNegocio(negocioId) {
     return reservasDiariasData.filter(r => r.negocio_id === negocioId).length;
 }
 
-async function obtenerActividadReservas() {
+async function obtenerActividadReservas(negocioIds = []) {
     try {
+        actividadReservasCargada = false;
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
 
@@ -382,23 +381,32 @@ async function obtenerActividadReservas() {
         const fechaInicioSemana = hace7.toISOString().split('T')[0];
         const fechaHoy = hoy.toISOString().split('T')[0];
 
-        const { data: semana, error: errorSemana } = await window.supabase
+        let querySemana = window.supabase
             .from('reservas')
             .select('negocio_id, fecha, hora_inicio, estado')
             .gte('fecha', fechaInicioSemana)
             .lte('fecha', fechaHoy);
+        if (negocioIds.length > 0) {
+            querySemana = querySemana.in('negocio_id', negocioIds);
+        }
+        const { data: semana, error: errorSemana } = await querySemana;
 
         if (errorSemana) {
             console.warn('Error al obtener reservas de la ultima semana:', errorSemana);
         }
 
-        const { data: ultimas, error: errorUltimas } = await window.supabase
+        let queryUltimas = window.supabase
             .from('reservas')
             .select('negocio_id, fecha, hora_inicio, estado')
-            .lte('fecha', fechaHoy)
+            .lte('fecha', fechaHoy);
+        if (negocioIds.length > 0) {
+            queryUltimas = queryUltimas.in('negocio_id', negocioIds);
+        }
+        queryUltimas = queryUltimas
             .order('fecha', { ascending: false })
             .order('hora_inicio', { ascending: false })
             .limit(5000);
+        const { data: ultimas, error: errorUltimas } = await queryUltimas;
 
         if (errorUltimas) {
             console.warn('Error al obtener ultima cita por negocio:', errorUltimas);
@@ -412,10 +420,12 @@ async function obtenerActividadReservas() {
                 ultimaCitaPorNegocio[reserva.negocio_id] = reserva;
             }
         });
+        actividadReservasCargada = true;
     } catch (error) {
         console.error('Error obteniendo actividad de reservas:', error);
         reservasSemanaData = [];
         ultimaCitaPorNegocio = {};
+        actividadReservasCargada = true;
     }
 }
 
@@ -425,6 +435,7 @@ function getReservasSemanaPorNegocio(negocioId) {
 }
 
 function formatearUltimaCita(negocioId) {
+    if (!actividadReservasCargada) return 'Cargando actividad...';
     const cita = ultimaCitaPorNegocio[negocioId];
     if (!cita?.fecha) return 'Sin citas registradas';
 
@@ -1766,11 +1777,7 @@ async function init() {
     const acceso = await verificarAcceso();
     if (!acceso) return;
     
-    // Obtener reservas diarias
-    reservasDiarias = await obtenerReservasDiarias();
-    await obtenerActividadReservas();
-    
-    // Cargar negocios
+    // Cargar negocios primero para mostrar el panel rapido.
     const negocios = await cargarNegocios();
     
     if (negocios.length === 0) {
@@ -1796,6 +1803,20 @@ async function init() {
     renderListaNegocios(negociosOrdenados);
     actualizarBotonesFiltro();
     actualizarBotonOrden();
+
+    Promise.all([
+        obtenerReservasDiarias(),
+        obtenerActividadReservas(negocios.map(n => n.id).filter(Boolean))
+    ]).then(([totalDiarias]) => {
+        reservasDiarias = totalDiarias || 0;
+        renderHeader();
+        actualizarListaNegocios();
+        actualizarBotonesFiltro();
+        actualizarBotonOrden();
+        console.log('✅ Actividad de reservas cargada en segundo plano');
+    }).catch(error => {
+        console.error('Error cargando actividad en segundo plano:', error);
+    });
 }
 
 // Iniciar cuando el DOM esté listo
