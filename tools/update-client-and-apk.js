@@ -23,6 +23,27 @@ function run(command, commandArgs, cwd, dryRun) {
   cp.execFileSync(command, commandArgs, { cwd, stdio: 'inherit' });
 }
 
+function cleanSyncBackups(targetRoot, dryRun) {
+  const entries = fs.readdirSync(targetRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    const shouldDelete = entry.name.startsWith('.backup-full-sync-') || entry.name.includes('.backup-sync-');
+    if (!shouldDelete) continue;
+
+    const fullPath = path.join(targetRoot, entry.name);
+    console.log(`Limpiando backup temporal: ${fullPath}`);
+    if (!dryRun) fs.rmSync(fullPath, { recursive: true, force: true });
+  }
+
+  const utilsDir = path.join(targetRoot, 'utils');
+  if (!fs.existsSync(utilsDir)) return;
+  for (const entry of fs.readdirSync(utilsDir, { withFileTypes: true })) {
+    if (!entry.name.includes('.backup-sync-')) continue;
+    const fullPath = path.join(utilsDir, entry.name);
+    console.log(`Limpiando backup temporal: ${fullPath}`);
+    if (!dryRun) fs.rmSync(fullPath, { recursive: true, force: true });
+  }
+}
+
 const superAdminRoot = path.resolve(__dirname, '..');
 const newProjectRoot = path.resolve(superAdminRoot, '..', 'New project');
 const updater = path.join(newProjectRoot, 'update-client-from-exotic.js');
@@ -64,6 +85,8 @@ const dryRun = !apply;
 
 run(nodeExe, [updater, '--target', targetRoot, ...(apply ? ['--apply'] : [])], newProjectRoot, dryRun);
 run(nodeExe, [apkSetup, '--target', targetRoot, ...(apply ? ['--apply'] : [])], superAdminRoot, dryRun);
+
+cleanSyncBackups(targetRoot, dryRun);
 
 run('git', ['status', '--short'], targetRoot, dryRun);
 
