@@ -7,6 +7,7 @@ const NTFY_TOPIC_GLOBAL = "rservas-vencimientos";
 const ADMIN_EMAIL = "rservasroma@gmail.com";
 const CLIENTES_ROOT_LOCAL = "C:\\Users\\RODO\\Documents\\ClientesRservas";
 const AUTOMATION_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\New project";
+const SUPERADMIN_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\Rservas.SuperAdmin";
 const NEGOCIOS_RECTIFICADOS = {
     "742405d7-292e-424a-bd63-f6e6b09fd7d5": {
         carpeta_local: "ketycasalon",
@@ -596,6 +597,16 @@ function crearComandoActualizarNegocio(carpetaLocal) {
     ].join('\r\n');
 }
 
+function crearComandoActualizarNegocioConApk(carpetaLocal) {
+    const carpeta = limpiarValorCmd(carpetaLocal);
+    const target = `${CLIENTES_ROOT_LOCAL}\\${carpeta}`;
+
+    return [
+        `cd /d "${SUPERADMIN_DIR_LOCAL}"`,
+        `update-client-and-apk.bat --target "${target}" --apply`
+    ].join('\r\n');
+}
+
 async function copiarAlPortapapeles(texto) {
     if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(texto);
@@ -629,6 +640,27 @@ async function prepararActualizacionNegocio(negocio) {
         const copiado = await copiarAlPortapapeles(comando);
         if (!copiado) throw new Error('copy-failed');
         alert('Comando copiado. Pegalo en CMD como administrador para actualizar este negocio desde exoticbyyuly.');
+    } catch (error) {
+        console.error('No se pudo copiar el comando:', error);
+        prompt('No se pudo copiar automaticamente. Copia este comando:', comando);
+    }
+}
+
+async function prepararActualizacionNegocioConApk(negocio) {
+    const sugerida = obtenerCarpetaSugerida(negocio);
+    const carpeta = prompt(
+        `Carpeta local del negocio "${negocio.nombre || 'Sin nombre'}":`,
+        sugerida
+    );
+
+    if (!carpeta) return;
+
+    const comando = crearComandoActualizarNegocioConApk(carpeta);
+
+    try {
+        const copiado = await copiarAlPortapapeles(comando);
+        if (!copiado) throw new Error('copy-failed');
+        alert('Comando copiado. Pegalo en CMD para actualizar la app, preparar APK, hacer commit y push.');
     } catch (error) {
         console.error('No se pudo copiar el comando:', error);
         prompt('No se pudo copiar automaticamente. Copia este comando:', comando);
@@ -1466,6 +1498,8 @@ function renderListaNegocios(negocios) {
                     <button onclick="window.abrirModalPagadoHasta('${n.id}', '${n.nombre.replace(/'/g, "\\'")}', '${n.proximo_pago || ''}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Pagado hasta</button>
 
                     <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar app</button>
+
+                    <button onclick="window.prepararActualizacionNegocioConApk(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar + APK</button>
                     
                     <div class="flex flex-col gap-1">
                         <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
@@ -1748,6 +1782,7 @@ window.enviarWhatsAppSimple = enviarWhatsAppSimple;
 window.notificarNegocio = notificarNegocio;
 window.notificarVencimiento = notificarVencimiento;  
 window.prepararActualizacionNegocio = prepararActualizacionNegocio;
+window.prepararActualizacionNegocioConApk = prepararActualizacionNegocioConApk;
 window.notificarATodos = notificarATodos;
 window.abrirModalPagadoHasta = abrirModalPagadoHasta;
 window.guardarPagadoHasta = guardarPagadoHasta;
