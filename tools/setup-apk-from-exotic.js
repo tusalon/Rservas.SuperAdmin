@@ -157,6 +157,9 @@ if (!apply) process.exit(0);
 copyPath(path.join(source, 'android'), path.join(targetRoot, 'android'));
 copyPath(path.join(source, 'scripts'), path.join(targetRoot, 'scripts'));
 copyPath(path.join(source, '.github'), path.join(targetRoot, '.github'));
+if (fs.existsSync(path.join(source, 'vendor'))) {
+  copyPath(path.join(source, 'vendor'), path.join(targetRoot, 'vendor'));
+}
 fs.copyFileSync(path.join(source, 'capacitor.config.json'), path.join(targetRoot, 'capacitor.config.json'));
 
 const gitignoreSource = path.join(source, '.gitignore');
