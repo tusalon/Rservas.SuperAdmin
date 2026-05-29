@@ -131,6 +131,7 @@ const slug = kebabSlug(getArg('slug', folderSlug));
 const packageSlug = normalizeSlug(slug);
 const appId = getArg('appId', `com.tusalon.${packageSlug}`);
 const artifact = getArg('artifact', `${slug}-debug-apk`);
+const apkFileName = getArg('apk', `${slug}-debug.apk`);
 const npmName = normalizeSlug(slug);
 const javaPackagePath = appId.split('.').join(path.sep);
 const sourcePackagePath = path.join(source, 'android', 'app', 'src', 'main', 'java', 'com', 'tusalon', 'exoticnailsbyyuli');
@@ -148,6 +149,7 @@ console.log(`Nombre: ${appName}`);
 console.log(`Slug: ${slug}`);
 console.log(`App ID: ${appId}`);
 console.log(`Artifact: ${artifact}`);
+console.log(`APK: ${apkFileName}`);
 console.log(apply ? 'Modo: aplicar cambios' : 'Modo: simulacion. Agrega --apply para escribir.');
 
 if (!apply) process.exit(0);
@@ -215,7 +217,9 @@ targetPackage.devDependencies = {
 writeJson(packagePath, targetPackage);
 
 replaceInFile(path.join(targetRoot, '.github', 'workflows', 'build-android-apk.yml'), [
-  ['exotic-nails-debug-apk', artifact]
+  ['exotic-nails-debug-apk', artifact],
+  ['exoticnailsbyyuli-debug-apk', artifact],
+  ['exoticnailsbyyuli-debug.apk', apkFileName]
 ]);
 
 run('npm', ['install', '--package-lock-only'], targetRoot);
