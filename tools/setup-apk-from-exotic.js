@@ -79,9 +79,15 @@ function getRepoUrl(repoRoot) {
 }
 
 function run(command, commandArgs, cwd) {
+  const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command;
   console.log(`> ${command} ${commandArgs.join(' ')}`);
   if (!apply) return;
-  cp.execFileSync(command, commandArgs, { cwd, stdio: 'inherit' });
+  if (process.platform === 'win32' && command === 'npm') {
+    const quotedArgs = commandArgs.map(arg => `"${String(arg).replace(/"/g, '\\"')}"`).join(' ');
+    cp.execSync(`${executable} ${quotedArgs}`, { cwd, stdio: 'inherit', shell: true });
+    return;
+  }
+  cp.execFileSync(executable, commandArgs, { cwd, stdio: 'inherit' });
 }
 
 function replaceInFile(file, replacements) {
@@ -179,7 +185,9 @@ const packagePath = path.join(targetRoot, 'package.json');
 const targetPackage = fs.existsSync(packagePath) ? readJson(packagePath) : {};
 targetPackage.name = npmName;
 targetPackage.version = targetPackage.version || '1.0.0';
-targetPackage.description = targetPackage.description || `APK Android para ${appName}`;
+if (!targetPackage.description || targetPackage.description.includes('Exotic Nails by Yuly')) {
+  targetPackage.description = `APK Android para ${appName}`;
+}
 targetPackage.main = targetPackage.main || 'admin-app.js';
 targetPackage.scripts = {
   ...(targetPackage.scripts || {}),
