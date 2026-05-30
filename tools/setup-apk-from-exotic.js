@@ -52,6 +52,25 @@ function copyPath(from, to) {
   fs.cpSync(from, to, { recursive: true });
 }
 
+function copyRequiredDir(from, to, requiredFile) {
+  copyPath(from, to);
+
+  const requiredTarget = path.join(to, requiredFile);
+  if (fs.existsSync(requiredTarget)) return;
+
+  ensureDir(to);
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    fs.cpSync(path.join(from, entry.name), path.join(to, entry.name), {
+      recursive: true,
+      force: true
+    });
+  }
+
+  if (!fs.existsSync(requiredTarget)) {
+    throw new Error(`No se pudo copiar ${requiredFile} a ${to}`);
+  }
+}
+
 function normalizeSlug(value) {
   return String(value || '')
     .normalize('NFD')
@@ -155,7 +174,7 @@ console.log(apply ? 'Modo: aplicar cambios' : 'Modo: simulacion. Agrega --apply 
 if (!apply) process.exit(0);
 
 copyPath(path.join(source, 'android'), path.join(targetRoot, 'android'));
-copyPath(path.join(source, 'scripts'), path.join(targetRoot, 'scripts'));
+copyRequiredDir(path.join(source, 'scripts'), path.join(targetRoot, 'scripts'), 'prepare-capacitor.ps1');
 copyPath(path.join(source, '.github'), path.join(targetRoot, '.github'));
 if (fs.existsSync(path.join(source, 'vendor'))) {
   copyPath(path.join(source, 'vendor'), path.join(targetRoot, 'vendor'));
