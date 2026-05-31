@@ -575,6 +575,10 @@ function buscarCarpetaCliente(negocio) {
     return '';
 }
 
+function getNegociosSinCarpeta() {
+    return negociosData.filter(negocio => !buscarCarpetaCliente(negocio));
+}
+
 function obtenerCarpetaSugerida(negocio) {
     const carpetaEncontrada = buscarCarpetaCliente(negocio);
     if (carpetaEncontrada) return carpetaEncontrada;
@@ -1194,6 +1198,8 @@ function actualizarListaNegocios() {
         resultados = resultados.filter(n => pendientesLocal.includes(n.id));
     } else if (filtroActual === 'eliminados') {
         resultados = resultados.filter(n => eliminadosLocal.includes(n.id));
+    } else if (filtroActual === 'sin_carpeta') {
+        resultados = resultados.filter(n => !buscarCarpetaCliente(n));
     } else if (filtroActual !== 'todos') {
         resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
     }
@@ -1213,12 +1219,12 @@ function actualizarListaNegocios() {
 }
 
 function actualizarBotonesFiltro() {
-    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados'];
+    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados', 'sin_carpeta'];
     estados.forEach(estado => {
         const btn = document.getElementById(`filtro-${estado}`);
         if (btn) {
-            btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-purple-600', 'bg-gray-600', 'bg-pink-600', 'text-white');
-            btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100', 'bg-purple-100', 'bg-gray-100', 'bg-pink-100', 'text-gray-700', 'text-green-700', 'text-red-700', 'text-yellow-700', 'text-purple-700');
+            btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-purple-600', 'bg-gray-600', 'bg-pink-600', 'bg-amber-600', 'text-white');
+            btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100', 'bg-purple-100', 'bg-gray-100', 'bg-pink-100', 'bg-amber-100', 'text-gray-700', 'text-green-700', 'text-red-700', 'text-yellow-700', 'text-purple-700', 'text-pink-700', 'text-amber-700');
             
             if (filtroActual === estado) {
                 if (estado === 'todos') btn.classList.add('bg-gray-800', 'text-white');
@@ -1228,6 +1234,7 @@ function actualizarBotonesFiltro() {
                 else if (estado === 'pendiente') btn.classList.add('bg-purple-600', 'text-white');
                 else if (estado === 'inactiva') btn.classList.add('bg-gray-600', 'text-white');
                 else if (estado === 'eliminados') btn.classList.add('bg-pink-600', 'text-white');
+                else if (estado === 'sin_carpeta') btn.classList.add('bg-amber-600', 'text-white');
             } else {
                 if (estado === 'todos') btn.classList.add('bg-gray-200', 'text-gray-700');
                 else if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
@@ -1236,6 +1243,7 @@ function actualizarBotonesFiltro() {
                 else if (estado === 'pendiente') btn.classList.add('bg-purple-100', 'text-purple-700');
                 else if (estado === 'inactiva') btn.classList.add('bg-gray-100', 'text-gray-700');
                 else if (estado === 'eliminados') btn.classList.add('bg-pink-100', 'text-pink-700');
+                else if (estado === 'sin_carpeta') btn.classList.add('bg-amber-100', 'text-amber-700');
             }
         }
     });
@@ -1251,7 +1259,8 @@ function renderHeader() {
         trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length,
         pendiente: negociosData.filter(n => pendientesLocal.includes(n.id)).length,
         inactiva: negociosData.filter(n => n.estado_suscripcion === 'inactiva').length,
-        eliminados: negociosData.filter(n => eliminadosLocal.includes(n.id)).length
+        eliminados: negociosData.filter(n => eliminadosLocal.includes(n.id)).length,
+        sin_carpeta: getNegociosSinCarpeta().length
     };
     
     // Obtener la fecha actual formateada
@@ -1270,6 +1279,7 @@ function renderHeader() {
                     <p class="text-gray-600 text-sm">Gestión de negocios Rservas</p>
                 </div>
                 <div class="flex gap-2 flex-wrap">
+                    <button onclick="filtrarPorEstado('sin_carpeta')" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">Revisar sin carpeta (${totalPorEstado.sin_carpeta})</button>
                     <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">📥 Exportar CSV</button>
                     <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Actualizar</button>
                     <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">🚪 Cerrar Sesión</button>
@@ -1359,6 +1369,16 @@ function renderHeader() {
                 <span class="text-xs text-gray-500">💰 ${PRECIO_MENSUAL} CUP/mes | ⏱️ +${DIAS_POR_DEFECTO} días</span>
             </div>
             
+            ${totalPorEstado.sin_carpeta > 0 ? `
+            <div class="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                    <p class="font-bold text-amber-800">Negocios sin carpeta local detectada: ${totalPorEstado.sin_carpeta}</p>
+                    <p class="text-sm text-amber-700">Estos negocios no tienen match automatico con ${escapeHtml(CLIENTES_ROOT_LOCAL)}. Revisalos antes de actualizar.</p>
+                </div>
+                <button onclick="filtrarPorEstado('sin_carpeta')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Ver solo estos</button>
+            </div>
+            ` : ''}
+
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
                 <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
                 <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">🟢 Activos (${totalPorEstado.activa})</button>
@@ -1367,6 +1387,7 @@ function renderHeader() {
                 <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
                 <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
                 <button id="filtro-eliminados" onclick="filtrarPorEstado('eliminados')" class="px-3 py-1.5 rounded-lg text-sm bg-pink-100 text-pink-700">🗑️ Eliminados (${totalPorEstado.eliminados})</button>
+                <button id="filtro-sin_carpeta" onclick="filtrarPorEstado('sin_carpeta')" class="px-3 py-1.5 rounded-lg text-sm bg-amber-100 text-amber-700">Sin carpeta (${totalPorEstado.sin_carpeta})</button>
             </div>
         </div>
     `;
@@ -1407,6 +1428,7 @@ function renderListaNegocios(negocios) {
         const urlNegocio = normalizarUrlNegocio(n);
         const urlLabel = urlNegocio ? escapeHtml(getUrlLabel(urlNegocio)) : '';
         const carpetaCliente = buscarCarpetaCliente(n);
+        const candidatosCarpeta = carpetaCliente ? [] : obtenerCandidatosCarpetaNegocio(n).slice(0, 4);
         
         const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
@@ -1448,6 +1470,7 @@ function renderListaNegocios(negocios) {
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
                         ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">Abrir negocio (${urlLabel})</a></p>` : ''}
                         <p class="text-sm ${carpetaCliente ? 'text-emerald-700' : 'text-amber-700'}">Carpeta: ${carpetaCliente ? escapeHtml(carpetaCliente) : 'sin match automatico'}</p>
+                        ${!carpetaCliente ? `<p class="text-xs text-amber-700 mt-1">Candidatos: ${candidatosCarpeta.length ? candidatosCarpeta.map(escapeHtml).join(' / ') : 'sin datos para sugerir'}</p>` : ''}
                     </div>
                 </div>
                 
