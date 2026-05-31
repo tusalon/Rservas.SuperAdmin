@@ -48,6 +48,7 @@ const superAdminRoot = path.resolve(__dirname, '..');
 const newProjectRoot = path.resolve(superAdminRoot, '..', 'New project');
 const updater = path.join(newProjectRoot, 'update-client-from-exotic.js');
 const apkSetup = path.join(superAdminRoot, 'tools', 'setup-apk-from-exotic.js');
+const versionMarker = path.join(superAdminRoot, 'tools', 'mark-client-version.js');
 const target = getArg('target');
 const commitMessage = getArg('message', 'Actualizar logica de reservas y APK');
 const apply = hasFlag('apply');
@@ -76,6 +77,11 @@ if (!fs.existsSync(apkSetup)) {
   process.exit(1);
 }
 
+if (!fs.existsSync(versionMarker)) {
+  console.error(`No existe el marcador de version: ${versionMarker}`);
+  process.exit(1);
+}
+
 console.log(`Cliente: ${targetRoot}`);
 console.log(`Modo: ${apply ? 'aplicar cambios' : 'simulacion. Agrega --apply para escribir.'}`);
 console.log(`Commit: ${commitMessage}`);
@@ -85,6 +91,7 @@ const dryRun = !apply;
 
 run(nodeExe, [updater, '--target', targetRoot, ...(apply ? ['--apply'] : [])], newProjectRoot, dryRun);
 run(nodeExe, [apkSetup, '--target', targetRoot, ...(apply ? ['--apply'] : [])], superAdminRoot, dryRun);
+run(nodeExe, [versionMarker, '--target', targetRoot, ...(apply ? ['--apply'] : [])], superAdminRoot, dryRun);
 
 cleanSyncBackups(targetRoot, dryRun);
 

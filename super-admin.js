@@ -8,6 +8,8 @@ const ADMIN_EMAIL = "rservasroma@gmail.com";
 const CLIENTES_ROOT_LOCAL = "C:\\Users\\RODO\\Documents\\ClientesRservas";
 const AUTOMATION_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\New project";
 const SUPERADMIN_DIR_LOCAL = "C:\\Users\\RODO\\Documents\\Rservas.SuperAdmin";
+const APP_BASE_VERSION = "20260531-rservas-base-v1";
+const APP_VERSION_FILE = "rservas-version.json";
 const NEGOCIOS_RECTIFICADOS = {
     "742405d7-292e-424a-bd63-f6e6b09fd7d5": {
         carpeta_local: "ketycasalon",
@@ -502,6 +504,8 @@ let reservasDiariasData = [];
 let reservasSemanaData = [];
 let ultimaCitaPorNegocio = {};
 let actividadReservasCargada = false;
+let versionRenderToken = 0;
+const versionAppCache = {};
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
 let ultimaVezEscrito = JSON.parse(localStorage.getItem('ultima_vez_escrito')) || {};
@@ -714,6 +718,80 @@ function getUrlLabel(url) {
     }
 }
 
+function getVersionUrlNegocio(negocio, carpetaCliente) {
+    const urlNegocio = normalizarUrlNegocio(negocio);
+
+    if (urlNegocio) {
+        try {
+            const baseUrl = urlNegocio.endsWith('/') ? urlNegocio : `${urlNegocio}/`;
+            return new URL(APP_VERSION_FILE, baseUrl).href;
+        } catch (error) {
+            console.warn('No se pudo formar URL de version:', error);
+        }
+    }
+
+    if (!carpetaCliente) return '';
+    return `https://tusalon.github.io/${encodeURIComponent(carpetaCliente)}/${APP_VERSION_FILE}`;
+}
+
+function getVersionBadgeHtml(estado, detalle = '') {
+    const config = {
+        cargando: { className: 'bg-gray-100 text-gray-600', text: 'Version: revisando...' },
+        actualizada: { className: 'bg-emerald-100 text-emerald-700', text: `Actualizada ${APP_BASE_VERSION}` },
+        pendiente: { className: 'bg-orange-100 text-orange-700', text: 'Pendiente de actualizar' },
+        sin_version: { className: 'bg-yellow-100 text-yellow-700', text: 'Sin version publicada' },
+        sin_carpeta: { className: 'bg-amber-100 text-amber-700', text: 'Sin carpeta para revisar version' },
+        error: { className: 'bg-red-100 text-red-700', text: 'No se pudo revisar version' }
+    }[estado] || { className: 'bg-gray-100 text-gray-600', text: 'Version desconocida' };
+
+    return `<span class="inline-flex px-2 py-1 rounded-full text-xs font-semibold ${config.className}">${config.text}${detalle ? ` · ${escapeHtml(detalle)}` : ''}</span>`;
+}
+
+async function revisarVersionNegocio(negocio, carpetaCliente) {
+    if (!carpetaCliente) return { estado: 'sin_carpeta' };
+
+    const versionUrl = getVersionUrlNegocio(negocio, carpetaCliente);
+    if (!versionUrl) return { estado: 'sin_version' };
+
+    if (versionAppCache[versionUrl]) return versionAppCache[versionUrl];
+
+    try {
+        const response = await fetch(`${versionUrl}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+            const sinVersion = { estado: 'sin_version' };
+            versionAppCache[versionUrl] = sinVersion;
+            return sinVersion;
+        }
+
+        const data = await response.json();
+        const version = String(data.version || '').trim();
+        const result = version === APP_BASE_VERSION
+            ? { estado: 'actualizada', version }
+            : { estado: 'pendiente', version: version || 'sin dato' };
+        versionAppCache[versionUrl] = result;
+        return result;
+    } catch (error) {
+        console.warn('Error revisando version de app:', versionUrl, error);
+        return { estado: 'error' };
+    }
+}
+
+function actualizarEstadoVersionesNegocios(negocios) {
+    const token = ++versionRenderToken;
+
+    negocios.forEach(async negocio => {
+        const el = document.getElementById(`version-app-${negocio.id}`);
+        if (!el) return;
+
+        const carpetaCliente = buscarCarpetaCliente(negocio);
+        const result = await revisarVersionNegocio(negocio, carpetaCliente);
+        if (token !== versionRenderToken) return;
+
+        const detalle = result.estado === 'pendiente' && result.version ? `tiene ${result.version}` : '';
+        el.innerHTML = getVersionBadgeHtml(result.estado, detalle);
+    });
+}
+
 function obtenerSlugDesdeUrl(url) {
     if (!url) return '';
 
@@ -837,6 +915,8 @@ function crearComandoActualizarNegocio(carpetaLocal) {
     return [
         `cd /d "${AUTOMATION_DIR_LOCAL}"`,
         `node update-client-from-exotic.js --target "${target}" --apply`,
+        `cd /d "${SUPERADMIN_DIR_LOCAL}"`,
+        `node tools\\mark-client-version.js --target "${target}" --apply`,
         `cd /d "${target}"`,
         'git status',
         'git add .',
@@ -1715,6 +1795,7 @@ function renderListaNegocios(negocios) {
                         ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">Abrir negocio (${urlLabel})</a></p>` : ''}
                         <p class="text-sm ${carpetaCliente ? 'text-emerald-700' : 'text-amber-700'}">Carpeta: ${carpetaCliente ? escapeHtml(carpetaCliente) : 'sin match automatico'}</p>
                         ${!carpetaCliente ? `<p class="text-xs text-amber-700 mt-1">Candidatos: ${candidatosCarpeta.length ? candidatosCarpeta.map(escapeHtml).join(' / ') : 'sin datos para sugerir'}</p>` : ''}
+                        <div id="version-app-${n.id}" class="mt-2">${getVersionBadgeHtml(carpetaCliente ? 'cargando' : 'sin_carpeta')}</div>
                     </div>
                 </div>
                 
@@ -1797,6 +1878,7 @@ function renderListaNegocios(negocios) {
     const listaNegocios = document.getElementById('lista-negocios');
     if (listaNegocios) {
         listaNegocios.innerHTML = html;
+        actualizarEstadoVersionesNegocios(negocios);
     }
 }
 
