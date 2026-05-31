@@ -878,7 +878,7 @@ function elegirMejorCarpeta(candidata, coincidencias) {
 
 function buscarCarpetaCliente(negocio) {
     const carpetaPorId = CARPETAS_CLIENTES_POR_NEGOCIO_ID[String(negocio?.id || '').toLowerCase()];
-    if (carpetaPorId && CARPETAS_CLIENTES.includes(carpetaPorId)) {
+    if (carpetaPorId) {
         return carpetaPorId;
     }
 
