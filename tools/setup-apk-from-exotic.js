@@ -58,12 +58,18 @@ function copyRequiredDir(from, to, requiredFile) {
   const requiredTarget = path.join(to, requiredFile);
   if (fs.existsSync(requiredTarget)) return;
 
-  ensureDir(to);
-  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
-    fs.cpSync(path.join(from, entry.name), path.join(to, entry.name), {
-      recursive: true,
-      force: true
-    });
+  const requiredSource = path.join(from, requiredFile);
+  if (fs.existsSync(requiredSource)) {
+    ensureDir(path.dirname(requiredTarget));
+    fs.copyFileSync(requiredSource, requiredTarget);
+  } else {
+    ensureDir(to);
+    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+      fs.cpSync(path.join(from, entry.name), path.join(to, entry.name), {
+        recursive: true,
+        force: true
+      });
+    }
   }
 
   if (!fs.existsSync(requiredTarget)) {
@@ -175,6 +181,18 @@ if (!apply) process.exit(0);
 
 copyPath(path.join(source, 'android'), path.join(targetRoot, 'android'));
 copyRequiredDir(path.join(source, 'scripts'), path.join(targetRoot, 'scripts'), 'prepare-capacitor.ps1');
+for (const scriptFile of [
+  'apply-android-icons.ps1',
+  'build-apk-debug.ps1',
+  'prepare-capacitor.ps1',
+  'sync-vendor-assets.ps1'
+]) {
+  const from = path.join(source, 'scripts', scriptFile);
+  if (fs.existsSync(from)) {
+    ensureDir(path.join(targetRoot, 'scripts'));
+    fs.copyFileSync(from, path.join(targetRoot, 'scripts', scriptFile));
+  }
+}
 copyPath(path.join(source, '.github'), path.join(targetRoot, '.github'));
 if (fs.existsSync(path.join(source, 'vendor'))) {
   copyPath(path.join(source, 'vendor'), path.join(targetRoot, 'vendor'));
@@ -191,11 +209,28 @@ for (const androidRootFile of [
   'variables.gradle'
 ]) {
   const from = path.join(source, 'android', androidRootFile);
-  if (fs.existsSync(from)) {
+  if (fs.existsSync(from) && fs.existsSync(path.dirname(path.join(targetRoot, 'android', androidRootFile)))) {
     fs.copyFileSync(from, path.join(targetRoot, 'android', androidRootFile));
   }
 }
 copyRequiredDir(path.join(source, 'android', 'gradle'), path.join(targetRoot, 'android', 'gradle'), path.join('wrapper', 'gradle-wrapper.properties'));
+for (const androidAppFile of ['.gitignore', 'build.gradle', 'proguard-rules.pro']) {
+  const from = path.join(source, 'android', 'app', androidAppFile);
+  if (fs.existsSync(from)) {
+    ensureDir(path.join(targetRoot, 'android', 'app'));
+    fs.copyFileSync(from, path.join(targetRoot, 'android', 'app', androidAppFile));
+  }
+}
+for (const requiredAndroidFile of [
+  path.join('android', 'app', 'build.gradle'),
+  path.join('android', 'app', 'src', 'main', 'AndroidManifest.xml'),
+  path.join('android', 'gradlew.bat')
+]) {
+  const resolved = path.join(targetRoot, requiredAndroidFile);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Falta archivo Android requerido: ${resolved}`);
+  }
+}
 
 const gitignoreSource = path.join(source, '.gitignore');
 if (fs.existsSync(gitignoreSource)) {
