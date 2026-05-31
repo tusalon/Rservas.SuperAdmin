@@ -181,6 +181,22 @@ if (fs.existsSync(path.join(source, 'vendor'))) {
 }
 fs.copyFileSync(path.join(source, 'capacitor.config.json'), path.join(targetRoot, 'capacitor.config.json'));
 
+for (const androidRootFile of [
+  '.gitignore',
+  'build.gradle',
+  'gradle.properties',
+  'gradlew',
+  'gradlew.bat',
+  'settings.gradle',
+  'variables.gradle'
+]) {
+  const from = path.join(source, 'android', androidRootFile);
+  if (fs.existsSync(from)) {
+    fs.copyFileSync(from, path.join(targetRoot, 'android', androidRootFile));
+  }
+}
+copyRequiredDir(path.join(source, 'android', 'gradle'), path.join(targetRoot, 'android', 'gradle'), path.join('wrapper', 'gradle-wrapper.properties'));
+
 const gitignoreSource = path.join(source, '.gitignore');
 if (fs.existsSync(gitignoreSource)) {
   fs.copyFileSync(gitignoreSource, path.join(targetRoot, '.gitignore'));
