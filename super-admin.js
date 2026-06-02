@@ -506,6 +506,7 @@ let ultimaCitaPorNegocio = {};
 let actividadReservasCargada = false;
 let versionRenderToken = 0;
 const versionAppCache = {};
+const seleccionActualizacion = new Set();
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
 let ultimaVezEscrito = JSON.parse(localStorage.getItem('ultima_vez_escrito')) || {};
@@ -935,6 +936,89 @@ function crearComandoActualizarNegocioConApk(carpetaLocal) {
     ].join('\r\n');
 }
 
+function crearBloqueActualizarTarget(target, carpetaLocal, indice = 0) {
+    const etiqueta = `next_${indice}_${normalizarParaMatch(carpetaLocal) || 'cliente'}`;
+    return [
+        `echo.`,
+        `echo ========================================`,
+        `echo Actualizando ${limpiarValorCmd(carpetaLocal)}`,
+        `echo ========================================`,
+        `if not exist "${target}" (`,
+        `  echo ERROR: No existe ${target}`,
+        `  goto :${etiqueta}`,
+        `)`,
+        `cd /d "${AUTOMATION_DIR_LOCAL}"`,
+        `node update-client-from-exotic.js --target "${target}" --apply`,
+        `cd /d "${SUPERADMIN_DIR_LOCAL}"`,
+        `node tools\\mark-client-version.js --target "${target}" --apply`,
+        `cd /d "${target}"`,
+        `git status --short`,
+        `git add .`,
+        `git diff --cached --quiet || git commit -m "Actualizar logica de reservas"`,
+        `git push`,
+        `:${etiqueta}`
+    ].join('\r\n');
+}
+
+function crearBloqueActualizarTargetConApk(target, carpetaLocal, indice = 0) {
+    const etiqueta = `next_apk_${indice}_${normalizarParaMatch(carpetaLocal) || 'cliente'}`;
+    return [
+        `echo.`,
+        `echo ========================================`,
+        `echo Actualizando app y APK de ${limpiarValorCmd(carpetaLocal)}`,
+        `echo ========================================`,
+        `if not exist "${target}" (`,
+        `  echo ERROR: No existe ${target}`,
+        `  goto :${etiqueta}`,
+        `)`,
+        `cd /d "${SUPERADMIN_DIR_LOCAL}"`,
+        `call update-client-and-apk.bat --target "${target}" --apply`,
+        `:${etiqueta}`
+    ].join('\r\n');
+}
+
+function crearComandoActualizarNegociosMasivo(negocios, conApk = false) {
+    const omitidos = [];
+    const bloques = [];
+
+    negocios.forEach((negocio, index) => {
+        const carpeta = buscarCarpetaCliente(negocio);
+        if (!carpeta) {
+            omitidos.push(negocio.nombre || negocio.id || 'Sin nombre');
+            return;
+        }
+
+        const carpetaLimpia = limpiarValorCmd(carpeta);
+        const target = `${CLIENTES_ROOT_LOCAL}\\${carpetaLimpia}`;
+        bloques.push(conApk
+            ? crearBloqueActualizarTargetConApk(target, carpetaLimpia, index + 1)
+            : crearBloqueActualizarTarget(target, carpetaLimpia, index + 1)
+        );
+    });
+
+    const encabezado = [
+        '@echo off',
+        'setlocal',
+        `echo Actualizacion masiva RservasRoma`,
+        `echo Negocios incluidos: ${bloques.length}`,
+        `echo Fecha: ${new Date().toLocaleString()}`,
+        ''
+    ].join('\r\n');
+
+    const cierre = [
+        '',
+        'echo.',
+        'echo Listo. Revisa arriba si algun negocio mostro error.',
+        'pause'
+    ].join('\r\n');
+
+    return {
+        comando: `${encabezado}${bloques.join('\r\n\r\n')}${cierre}`,
+        incluidos: bloques.length,
+        omitidos
+    };
+}
+
 async function copiarAlPortapapeles(texto) {
     if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(texto);
@@ -992,6 +1076,86 @@ async function prepararActualizacionNegocioConApk(negocio) {
     } catch (error) {
         console.error('No se pudo copiar el comando:', error);
         prompt('No se pudo copiar automaticamente. Copia este comando:', comando);
+    }
+}
+
+function getNegociosSeleccionadosActualizacion() {
+    return negociosData.filter(negocio => seleccionActualizacion.has(String(negocio.id)));
+}
+
+function actualizarBarraSeleccionActualizacion() {
+    const barra = document.getElementById('barra-actualizacion-masiva');
+    const contador = document.getElementById('contador-seleccion-actualizacion');
+    const seleccionados = getNegociosSeleccionadosActualizacion();
+    const conCarpeta = seleccionados.filter(negocio => buscarCarpetaCliente(negocio)).length;
+
+    if (contador) {
+        contador.textContent = `${seleccionados.length} seleccionados | ${conCarpeta} con carpeta`;
+    }
+
+    if (barra) {
+        barra.classList.toggle('border-purple-300', seleccionados.length > 0);
+        barra.classList.toggle('bg-purple-50', seleccionados.length > 0);
+    }
+}
+
+function toggleSeleccionActualizacion(negocioId, checked) {
+    const id = String(negocioId || '');
+    if (!id) return;
+    if (checked) {
+        seleccionActualizacion.add(id);
+    } else {
+        seleccionActualizacion.delete(id);
+    }
+    actualizarBarraSeleccionActualizacion();
+}
+
+function seleccionarNegociosVisiblesActualizacion() {
+    document.querySelectorAll('.check-actualizacion-negocio:not(:disabled)').forEach(input => {
+        input.checked = true;
+        seleccionActualizacion.add(String(input.value));
+    });
+    actualizarBarraSeleccionActualizacion();
+}
+
+function limpiarSeleccionActualizacion() {
+    seleccionActualizacion.clear();
+    document.querySelectorAll('.check-actualizacion-negocio').forEach(input => {
+        input.checked = false;
+    });
+    actualizarBarraSeleccionActualizacion();
+}
+
+async function prepararActualizacionSeleccionada(conApk = false) {
+    const seleccionados = getNegociosSeleccionadosActualizacion();
+    if (seleccionados.length === 0) {
+        alert('Marca primero los negocios que quieres actualizar.');
+        return;
+    }
+
+    const resultado = crearComandoActualizarNegociosMasivo(seleccionados, conApk);
+    if (resultado.incluidos === 0) {
+        alert('Los negocios seleccionados no tienen carpeta local detectada. Revisa el filtro Sin carpeta.');
+        return;
+    }
+
+    const mensajeOmitidos = resultado.omitidos.length
+        ? `\n\nSe omitiran ${resultado.omitidos.length} sin carpeta:\n${resultado.omitidos.slice(0, 10).join(', ')}${resultado.omitidos.length > 10 ? '...' : ''}`
+        : '';
+
+    const confirmar = confirm(
+        `Se generara un comando para actualizar ${resultado.incluidos} negocio(s)${conApk ? ' con APK' : ''}.` +
+        `${mensajeOmitidos}\n\nLuego pegalo en CMD desde cualquier ruta.`
+    );
+    if (!confirmar) return;
+
+    try {
+        const copiado = await copiarAlPortapapeles(resultado.comando);
+        if (!copiado) throw new Error('copy-failed');
+        alert(`Comando masivo copiado. Incluye ${resultado.incluidos} negocio(s). Pegalo en CMD.`);
+    } catch (error) {
+        console.error('No se pudo copiar el comando masivo:', error);
+        prompt('No se pudo copiar automaticamente. Copia este comando:', resultado.comando);
     }
 }
 
@@ -1730,6 +1894,21 @@ function renderListaNegocios(negocios) {
         html += `<div class="mb-3 text-sm text-gray-500">🔍 Resultados para: "${filtroBusqueda}" (${negocios.length} encontrados)</div>`;
     }
     
+    html += `
+        <div id="barra-actualizacion-masiva" class="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+                <p class="font-bold text-gray-900">Actualizacion masiva</p>
+                <p id="contador-seleccion-actualizacion" class="text-sm text-gray-600">0 seleccionados | 0 con carpeta</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="window.seleccionarNegociosVisiblesActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Seleccionar visibles</button>
+                <button onclick="window.limpiarSeleccionActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Limpiar</button>
+                <button onclick="window.prepararActualizacionSeleccionada(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar comando app</button>
+                <button onclick="window.prepararActualizacionSeleccionada(true)" class="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar app + APK</button>
+            </div>
+        </div>
+    `;
+
     html += `<div class="grid gap-4">`;
     
     if (negocios.length === 0) {
@@ -1753,6 +1932,7 @@ function renderListaNegocios(negocios) {
         const urlLabel = urlNegocio ? escapeHtml(getUrlLabel(urlNegocio)) : '';
         const carpetaCliente = buscarCarpetaCliente(n);
         const candidatosCarpeta = carpetaCliente ? [] : obtenerCandidatosCarpetaNegocio(n).slice(0, 4);
+        const seleccionadoActualizacion = seleccionActualizacion.has(String(n.id));
         
         const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
@@ -1784,6 +1964,15 @@ function renderListaNegocios(negocios) {
                 <div class="flex flex-col md:flex-row justify-between items-start gap-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2 flex-wrap">
+                            <label class="inline-flex items-center gap-2 px-2 py-1 rounded-lg border ${carpetaCliente ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-gray-200 bg-gray-50 text-gray-400'} text-xs font-bold">
+                                <input type="checkbox"
+                                       class="check-actualizacion-negocio w-4 h-4"
+                                       value="${escapeHtml(String(n.id))}"
+                                       onchange="window.toggleSeleccionActualizacion('${String(n.id).replace(/'/g, "\\'")}', this.checked)"
+                                       ${seleccionadoActualizacion ? 'checked' : ''}
+                                       ${carpetaCliente ? '' : 'disabled'}>
+                                Actualizar
+                            </label>
                             <h2 class="font-bold text-lg">${medallaTop}🏢 ${nombreMostrado}</h2>
                             ${ordenActual === 'reservas' ? `<span class="px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700 font-bold">Lugar #${posicionRanking}</span>` : ''}
                             <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
@@ -1878,6 +2067,7 @@ function renderListaNegocios(negocios) {
     const listaNegocios = document.getElementById('lista-negocios');
     if (listaNegocios) {
         listaNegocios.innerHTML = html;
+        actualizarBarraSeleccionActualizacion();
         actualizarEstadoVersionesNegocios(negocios);
     }
 }
@@ -2132,6 +2322,10 @@ window.notificarNegocio = notificarNegocio;
 window.notificarVencimiento = notificarVencimiento;  
 window.prepararActualizacionNegocio = prepararActualizacionNegocio;
 window.prepararActualizacionNegocioConApk = prepararActualizacionNegocioConApk;
+window.toggleSeleccionActualizacion = toggleSeleccionActualizacion;
+window.seleccionarNegociosVisiblesActualizacion = seleccionarNegociosVisiblesActualizacion;
+window.limpiarSeleccionActualizacion = limpiarSeleccionActualizacion;
+window.prepararActualizacionSeleccionada = prepararActualizacionSeleccionada;
 window.notificarATodos = notificarATodos;
 window.abrirModalPagadoHasta = abrirModalPagadoHasta;
 window.guardarPagadoHasta = guardarPagadoHasta;
