@@ -507,6 +507,7 @@ let actividadReservasCargada = false;
 let versionRenderToken = 0;
 const versionAppCache = {};
 const seleccionActualizacion = new Set();
+const LOTES_ACTUALIZACION_KEY = 'lotes_actualizacion_rservas';
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
 let ultimaVezEscrito = JSON.parse(localStorage.getItem('ultima_vez_escrito')) || {};
@@ -952,8 +953,10 @@ function crearBloqueActualizarTarget(target, carpetaLocal, indice = 0) {
         `cd /d "${SUPERADMIN_DIR_LOCAL}"`,
         `node tools\\mark-client-version.js --target "${target}" --apply`,
         `cd /d "${target}"`,
+        `if exist android git restore -- android`,
+        `if exist supabase\\.temp git restore -- supabase/.temp`,
         `git status --short`,
-        `git add .`,
+        `git add -A -- . ":(exclude).backup-full-sync-*" ":(exclude)*.backup-sync-*" ":(exclude)supabase/.temp" ":(exclude)supabase/.temp/**" ":(exclude)android" ":(exclude)android/**"`,
         `git diff --cached --quiet || git commit -m "Actualizar logica de reservas"`,
         `git push`,
         `:${etiqueta}`
@@ -1083,6 +1086,75 @@ function getNegociosSeleccionadosActualizacion() {
     return negociosData.filter(negocio => seleccionActualizacion.has(String(negocio.id)));
 }
 
+function cargarLotesActualizacion() {
+    try {
+        const lotes = JSON.parse(localStorage.getItem(LOTES_ACTUALIZACION_KEY) || '[]');
+        return Array.isArray(lotes) ? lotes : [];
+    } catch (error) {
+        console.warn('No se pudieron cargar los lotes de actualizacion:', error);
+        return [];
+    }
+}
+
+function guardarLotesActualizacion(lotes) {
+    localStorage.setItem(LOTES_ACTUALIZACION_KEY, JSON.stringify(lotes));
+}
+
+function getNegociosPorIds(ids = []) {
+    const idsSet = new Set(ids.map(id => String(id)));
+    return negociosData.filter(negocio => idsSet.has(String(negocio.id)));
+}
+
+function getProximoNombreLote() {
+    const total = cargarLotesActualizacion().length + 1;
+    return `Lote ${total}`;
+}
+
+function renderLotesActualizacion() {
+    const contenedor = document.getElementById('lotes-actualizacion-lista');
+    const resumen = document.getElementById('lotes-actualizacion-resumen');
+    if (!contenedor) return;
+
+    const lotes = cargarLotesActualizacion();
+    if (resumen) {
+        resumen.textContent = `${lotes.length} lote(s) guardado(s)`;
+    }
+
+    if (lotes.length === 0) {
+        contenedor.innerHTML = `<p class="text-sm text-gray-500">No hay lotes guardados todavia.</p>`;
+        return;
+    }
+
+    contenedor.innerHTML = lotes.map(lote => {
+        const ids = Array.isArray(lote.ids) ? lote.ids : [];
+        const negocios = getNegociosPorIds(ids);
+        const conCarpeta = negocios.filter(negocio => buscarCarpetaCliente(negocio)).length;
+        const nombres = negocios.slice(0, 4).map(n => n.nombre || buscarCarpetaCliente(n) || n.id).join(', ');
+        const resto = negocios.length > 4 ? ` +${negocios.length - 4}` : '';
+        const fecha = lote.fecha ? new Date(lote.fecha).toLocaleString() : 'Sin fecha';
+
+        return `
+            <div class="border border-gray-200 rounded-lg p-3 bg-white flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-bold text-gray-900">${escapeHtml(lote.nombre || 'Lote')}</span>
+                        <span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">${ids.length} negocios</span>
+                        <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">${conCarpeta} con carpeta</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">${escapeHtml(fecha)}</p>
+                    <p class="text-sm text-gray-600 mt-1">${escapeHtml(nombres || 'Sin negocios visibles')}${escapeHtml(resto)}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="window.cargarLoteActualizacion('${escapeHtml(lote.id)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1.5 rounded-lg text-sm font-medium">Cargar</button>
+                    <button onclick="window.prepararActualizacionLote('${escapeHtml(lote.id)}', false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold">Copiar app</button>
+                    <button onclick="window.prepararActualizacionLote('${escapeHtml(lote.id)}', true)" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-bold">App + APK</button>
+                    <button onclick="window.eliminarLoteActualizacion('${escapeHtml(lote.id)}')" class="bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium">Eliminar</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 function actualizarBarraSeleccionActualizacion() {
     const barra = document.getElementById('barra-actualizacion-masiva');
     const contador = document.getElementById('contador-seleccion-actualizacion');
@@ -1097,6 +1169,8 @@ function actualizarBarraSeleccionActualizacion() {
         barra.classList.toggle('border-purple-300', seleccionados.length > 0);
         barra.classList.toggle('bg-purple-50', seleccionados.length > 0);
     }
+
+    renderLotesActualizacion();
 }
 
 function toggleSeleccionActualizacion(negocioId, checked) {
@@ -1126,16 +1200,90 @@ function limpiarSeleccionActualizacion() {
     actualizarBarraSeleccionActualizacion();
 }
 
-async function prepararActualizacionSeleccionada(conApk = false) {
+function guardarSeleccionComoLote() {
     const seleccionados = getNegociosSeleccionadosActualizacion();
     if (seleccionados.length === 0) {
-        alert('Marca primero los negocios que quieres actualizar.');
+        alert('Marca primero los negocios que quieres guardar en un lote.');
         return;
     }
 
-    const resultado = crearComandoActualizarNegociosMasivo(seleccionados, conApk);
+    const nombre = prompt('Nombre del lote:', getProximoNombreLote());
+    if (!nombre) return;
+
+    const lotes = cargarLotesActualizacion();
+    const lote = {
+        id: `lote-${Date.now()}`,
+        nombre: nombre.trim(),
+        ids: seleccionados.map(negocio => String(negocio.id)),
+        fecha: new Date().toISOString()
+    };
+
+    lotes.push(lote);
+    guardarLotesActualizacion(lotes);
+    renderLotesActualizacion();
+    alert(`${lote.nombre} guardado con ${lote.ids.length} negocio(s).`);
+}
+
+function guardarSeleccionEnLotesDeDiez() {
+    const seleccionados = getNegociosSeleccionadosActualizacion();
+    if (seleccionados.length === 0) {
+        alert('Marca primero los negocios que quieres dividir en lotes.');
+        return;
+    }
+
+    const tamano = 10;
+    const lotesActuales = cargarLotesActualizacion();
+    const baseNombre = prompt('Nombre base para los lotes:', 'Lote');
+    if (!baseNombre) return;
+
+    const chunks = [];
+    for (let i = 0; i < seleccionados.length; i += tamano) {
+        chunks.push(seleccionados.slice(i, i + tamano));
+    }
+
+    if (!confirm(`Se guardaran ${chunks.length} lote(s) de hasta ${tamano} negocio(s).`)) return;
+
+    const nuevos = chunks.map((grupo, index) => ({
+        id: `lote-${Date.now()}-${index + 1}`,
+        nombre: `${baseNombre.trim()} ${lotesActuales.length + index + 1}`,
+        ids: grupo.map(negocio => String(negocio.id)),
+        fecha: new Date().toISOString()
+    }));
+
+    guardarLotesActualizacion([...lotesActuales, ...nuevos]);
+    renderLotesActualizacion();
+    alert(`Listo. Se guardaron ${nuevos.length} lote(s).`);
+}
+
+function cargarLoteActualizacion(loteId) {
+    const lote = cargarLotesActualizacion().find(item => String(item.id) === String(loteId));
+    if (!lote) {
+        alert('No se encontro ese lote.');
+        return;
+    }
+
+    seleccionActualizacion.clear();
+    (lote.ids || []).forEach(id => seleccionActualizacion.add(String(id)));
+    document.querySelectorAll('.check-actualizacion-negocio').forEach(input => {
+        input.checked = seleccionActualizacion.has(String(input.value));
+    });
+    actualizarBarraSeleccionActualizacion();
+    alert(`${lote.nombre} cargado. Puedes copiar el comando o ajustar la seleccion.`);
+}
+
+function eliminarLoteActualizacion(loteId) {
+    const lotes = cargarLotesActualizacion();
+    const lote = lotes.find(item => String(item.id) === String(loteId));
+    if (!lote) return;
+    if (!confirm(`Eliminar ${lote.nombre}?`)) return;
+    guardarLotesActualizacion(lotes.filter(item => String(item.id) !== String(loteId)));
+    renderLotesActualizacion();
+}
+
+async function copiarComandoActualizacion(negocios, conApk = false, etiqueta = 'seleccion') {
+    const resultado = crearComandoActualizarNegociosMasivo(negocios, conApk);
     if (resultado.incluidos === 0) {
-        alert('Los negocios seleccionados no tienen carpeta local detectada. Revisa el filtro Sin carpeta.');
+        alert('Los negocios no tienen carpeta local detectada. Revisa el filtro Sin carpeta.');
         return;
     }
 
@@ -1144,7 +1292,7 @@ async function prepararActualizacionSeleccionada(conApk = false) {
         : '';
 
     const confirmar = confirm(
-        `Se generara un comando para actualizar ${resultado.incluidos} negocio(s)${conApk ? ' con APK' : ''}.` +
+        `Se generara un comando para actualizar ${resultado.incluidos} negocio(s)${conApk ? ' con APK' : ''} desde ${etiqueta}.` +
         `${mensajeOmitidos}\n\nLuego pegalo en CMD desde cualquier ruta.`
     );
     if (!confirmar) return;
@@ -1152,11 +1300,32 @@ async function prepararActualizacionSeleccionada(conApk = false) {
     try {
         const copiado = await copiarAlPortapapeles(resultado.comando);
         if (!copiado) throw new Error('copy-failed');
-        alert(`Comando masivo copiado. Incluye ${resultado.incluidos} negocio(s). Pegalo en CMD.`);
+        alert(`Comando copiado. Incluye ${resultado.incluidos} negocio(s). Pegalo en CMD.`);
     } catch (error) {
-        console.error('No se pudo copiar el comando masivo:', error);
+        console.error('No se pudo copiar el comando:', error);
         prompt('No se pudo copiar automaticamente. Copia este comando:', resultado.comando);
     }
+}
+
+async function prepararActualizacionSeleccionada(conApk = false) {
+    const seleccionados = getNegociosSeleccionadosActualizacion();
+    if (seleccionados.length === 0) {
+        alert('Marca primero los negocios que quieres actualizar.');
+        return;
+    }
+
+    await copiarComandoActualizacion(seleccionados, conApk, 'la seleccion actual');
+}
+
+async function prepararActualizacionLote(loteId, conApk = false) {
+    const lote = cargarLotesActualizacion().find(item => String(item.id) === String(loteId));
+    if (!lote) {
+        alert('No se encontro ese lote.');
+        return;
+    }
+
+    const negocios = getNegociosPorIds(lote.ids || []);
+    await copiarComandoActualizacion(negocios, conApk, lote.nombre || 'lote');
 }
 
 function mostrarErrorConexion() {
@@ -1895,16 +2064,30 @@ function renderListaNegocios(negocios) {
     }
     
     html += `
-        <div id="barra-actualizacion-masiva" class="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div>
-                <p class="font-bold text-gray-900">Actualizacion masiva</p>
-                <p id="contador-seleccion-actualizacion" class="text-sm text-gray-600">0 seleccionados | 0 con carpeta</p>
+        <div id="barra-actualizacion-masiva" class="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-4">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div>
+                    <p class="font-bold text-gray-900">Actualizacion masiva</p>
+                    <p id="contador-seleccion-actualizacion" class="text-sm text-gray-600">0 seleccionados | 0 con carpeta</p>
+                    <p class="text-xs text-gray-500 mt-1">Guarda grupos fijos como Lote 1, Lote 2 y reutilizalos cuando quieras.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="window.seleccionarNegociosVisiblesActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Seleccionar visibles</button>
+                    <button onclick="window.limpiarSeleccionActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Limpiar</button>
+                    <button onclick="window.guardarSeleccionComoLote()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Guardar lote</button>
+                    <button onclick="window.guardarSeleccionEnLotesDeDiez()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-4 py-2 rounded-lg text-sm font-bold">Guardar lotes de 10</button>
+                    <button onclick="window.prepararActualizacionSeleccionada(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar seleccion app</button>
+                    <button onclick="window.prepararActualizacionSeleccionada(true)" class="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold">Seleccion + APK</button>
+                </div>
             </div>
-            <div class="flex flex-wrap gap-2">
-                <button onclick="window.seleccionarNegociosVisiblesActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Seleccionar visibles</button>
-                <button onclick="window.limpiarSeleccionActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Limpiar</button>
-                <button onclick="window.prepararActualizacionSeleccionada(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar comando app</button>
-                <button onclick="window.prepararActualizacionSeleccionada(true)" class="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar app + APK</button>
+            <div class="border-t pt-3">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <p class="font-semibold text-gray-800">Lotes guardados</p>
+                    <p id="lotes-actualizacion-resumen" class="text-xs text-gray-500">0 lote(s) guardado(s)</p>
+                </div>
+                <div id="lotes-actualizacion-lista" class="grid gap-2">
+                    <p class="text-sm text-gray-500">No hay lotes guardados todavia.</p>
+                </div>
             </div>
         </div>
     `;
@@ -2325,7 +2508,12 @@ window.prepararActualizacionNegocioConApk = prepararActualizacionNegocioConApk;
 window.toggleSeleccionActualizacion = toggleSeleccionActualizacion;
 window.seleccionarNegociosVisiblesActualizacion = seleccionarNegociosVisiblesActualizacion;
 window.limpiarSeleccionActualizacion = limpiarSeleccionActualizacion;
+window.guardarSeleccionComoLote = guardarSeleccionComoLote;
+window.guardarSeleccionEnLotesDeDiez = guardarSeleccionEnLotesDeDiez;
+window.cargarLoteActualizacion = cargarLoteActualizacion;
+window.eliminarLoteActualizacion = eliminarLoteActualizacion;
 window.prepararActualizacionSeleccionada = prepararActualizacionSeleccionada;
+window.prepararActualizacionLote = prepararActualizacionLote;
 window.notificarATodos = notificarATodos;
 window.abrirModalPagadoHasta = abrirModalPagadoHasta;
 window.guardarPagadoHasta = guardarPagadoHasta;
