@@ -23,6 +23,22 @@ function run(command, commandArgs, cwd, dryRun) {
   cp.execFileSync(command, commandArgs, { cwd, stdio: 'inherit' });
 }
 
+function getCurrentBranch(cwd) {
+  return cp.execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8' }).trim() || 'main';
+}
+
+function hasUpstream(cwd) {
+  try {
+    cp.execFileSync('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], {
+      cwd,
+      stdio: 'ignore'
+    });
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 function cleanSyncBackups(targetRoot, dryRun) {
   const entries = fs.readdirSync(targetRoot, { withFileTypes: true });
   for (const entry of entries) {
@@ -109,7 +125,12 @@ run('git', ['add', '.'], targetRoot, dryRun);
 run('git', ['commit', '-m', commitMessage], targetRoot, dryRun);
 
 if (push) {
-  run('git', ['push'], targetRoot, dryRun);
+  if (!dryRun && !hasUpstream(targetRoot)) {
+    const branch = getCurrentBranch(targetRoot);
+    run('git', ['push', '--set-upstream', 'origin', branch], targetRoot, dryRun);
+  } else {
+    run('git', ['push'], targetRoot, dryRun);
+  }
 }
 
 console.log('\nListo.');
