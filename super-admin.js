@@ -1509,6 +1509,128 @@ async function inactivarNegocio(id, nombreNegocio) {
     }
 }
 
+const TABLAS_BORRADO_NEGOCIO = [
+    { table: 'listas_espera', column: 'negocio_id', label: 'Listas de espera' },
+    { table: 'lista_espera', column: 'negocio_id', label: 'Lista de espera' },
+    { table: 'push_subscriptions', column: 'negocio_id', label: 'Suscripciones push' },
+    { table: 'notificaciones_push', column: 'negocio_id', label: 'Notificaciones push' },
+    { table: 'clientes_bloqueados', column: 'negocio_id', label: 'Clientes bloqueados' },
+    { table: 'reservas', column: 'negocio_id', label: 'Reservas' },
+    { table: 'clientes', column: 'negocio_id', label: 'Clientes' },
+    { table: 'profesional_servicios', column: 'negocio_id', label: 'Asignaciones profesional-servicio' },
+    { table: 'horarios_profesionales', column: 'negocio_id', label: 'Horarios profesionales' },
+    { table: 'profesionales', column: 'negocio_id', label: 'Profesionales' },
+    { table: 'servicios', column: 'negocio_id', label: 'Servicios' },
+    { table: 'categorias_servicios', column: 'negocio_id', label: 'Categorias de servicios' },
+    { table: 'dias_cerrados', column: 'negocio_id', label: 'Dias cerrados' },
+    { table: 'configuracion', column: 'negocio_id', label: 'Configuracion' },
+    { table: 'suscripciones', column: 'negocio_id', label: 'Suscripciones' },
+    { table: 'roma_finanzas_ingresos', column: 'negocio_id', label: 'RomaFinanzas ingresos' },
+    { table: 'roma_finanzas_gastos', column: 'negocio_id', label: 'RomaFinanzas gastos' },
+    { table: 'roma_finanzas_materials', column: 'negocio_id', label: 'RomaFinanzas materiales' },
+    { table: 'roma_finanzas_services', column: 'negocio_id', label: 'RomaFinanzas servicios' },
+    { table: 'roma_finanzas_fichas_costo', column: 'negocio_id', label: 'RomaFinanzas fichas de costo' },
+    { table: 'roma_finanzas_config', column: 'negocio_id', label: 'RomaFinanzas configuracion' }
+];
+
+function esErrorTablaOColumnaInexistente(error) {
+    const code = error?.code;
+    const message = String(error?.message || '').toLowerCase();
+    return ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(code)
+        || message.includes('could not find')
+        || message.includes('does not exist')
+        || message.includes('schema cache');
+}
+
+async function borrarRegistrosPorNegocio({ table, column, label }, negocioId) {
+    try {
+        const { error, count } = await window.supabase
+            .from(table)
+            .delete({ count: 'exact' })
+            .eq(column, negocioId);
+
+        if (error) {
+            if (esErrorTablaOColumnaInexistente(error)) {
+                return { table, label, status: 'omitida', detail: error.message };
+            }
+            return { table, label, status: 'error', detail: error.message };
+        }
+
+        return { table, label, status: 'ok', count: count || 0 };
+    } catch (error) {
+        return { table, label, status: 'error', detail: error.message };
+    }
+}
+
+function limpiarEstadoLocalNegocio(id) {
+    pendientesLocal = pendientesLocal.filter(negocioId => negocioId !== id);
+    eliminadosLocal = eliminadosLocal.filter(negocioId => negocioId !== id);
+    localStorage.setItem(PENDIENTES_KEY, JSON.stringify(pendientesLocal));
+    localStorage.setItem(ELIMINADOS_KEY, JSON.stringify(eliminadosLocal));
+}
+
+async function borrarNegocioCompleto(id, nombreNegocio) {
+    const nombre = nombreNegocio || 'este negocio';
+    const primeraConfirmacion = confirm(
+        `BORRAR DEFINITIVAMENTE ${nombre} de Supabase?\n\n` +
+        'Esto elimina reservas, clientes, profesionales, servicios, configuracion, suscripcion y datos de RomaFinanzas.\n\n' +
+        'Esta accion no se puede deshacer.'
+    );
+    if (!primeraConfirmacion) return;
+
+    const codigo = prompt(`Para confirmar el borrado total de ${nombre}, escribe BORRAR:`);
+    if (codigo !== 'BORRAR') {
+        alert('Borrado cancelado. No se escribio BORRAR.');
+        return;
+    }
+
+    try {
+        const resultados = [];
+        for (const tabla of TABLAS_BORRADO_NEGOCIO) {
+            resultados.push(await borrarRegistrosPorNegocio(tabla, id));
+        }
+
+        const errores = resultados.filter(resultado => resultado.status === 'error');
+        if (errores.length > 0) {
+            const detalleErrores = errores
+                .slice(0, 10)
+                .map(resultado => `${resultado.label}: ${resultado.detail}`)
+                .join('\n');
+            alert(
+                'No se completo el borrado.\n\n' +
+                'Supabase bloqueo una o mas tablas. No se borro el negocio principal para evitar dejar datos huerfanos.\n\n' +
+                detalleErrores
+            );
+            return;
+        }
+
+        const resultadoNegocio = await borrarRegistrosPorNegocio(
+            { table: 'negocios', column: 'id', label: 'Negocio principal' },
+            id
+        );
+
+        if (resultadoNegocio.status === 'error') {
+            alert(
+                'Se borraron los datos relacionados, pero no se pudo borrar el negocio principal.\n\n' +
+                `${resultadoNegocio.detail}`
+            );
+            return;
+        }
+
+        limpiarEstadoLocalNegocio(id);
+
+        const resumen = resultados
+            .filter(resultado => resultado.status === 'ok' && resultado.count > 0)
+            .map(resultado => `${resultado.label}: ${resultado.count}`)
+            .join('\n') || 'No habia registros relacionados.';
+
+        alert(`Negocio borrado de Supabase.\n\n${resumen}`);
+        location.reload();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
 async function extenderFechaPago(id, nombreNegocio) {
     const diasExtras = prompt(`📅 Extender pago de ${nombreNegocio}\n\nDías a extender (recomendado: ${DIAS_POR_DEFECTO}):`, DIAS_POR_DEFECTO);
     if (!diasExtras) return;
@@ -2235,7 +2357,7 @@ function renderListaNegocios(negocios) {
                     
                     <button onclick="window.notificarVencimiento(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⚠️ Avisar Vencimiento</button>
                     
-                    <button onclick="window.inactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🗑️ Baja</button>
+                    <button onclick="window.borrarNegocioCompleto('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Borrar Supabase</button>
                     
                     <button onclick="window.toggleEliminado('${n.id}')" class="${esEliminado ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-100 text-pink-700 hover:bg-pink-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
                         ${esEliminado ? '👁️ Mostrar en Principal' : '🙈 Ocultar de Vista'}
@@ -2498,6 +2620,7 @@ window.activarDesdeTrial = activarDesdeTrial;
 window.suspenderNegocio = suspenderNegocio;
 window.reactivarNegocio = reactivarNegocio;
 window.inactivarNegocio = inactivarNegocio;
+window.borrarNegocioCompleto = borrarNegocioCompleto;
 window.extenderFechaPago = extenderFechaPago;
 window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
