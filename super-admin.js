@@ -720,6 +720,33 @@ function getUrlLabel(url) {
     }
 }
 
+function obtenerPrimerCampo(negocio, campos) {
+    for (const campo of campos) {
+        const valor = negocio?.[campo];
+        if (valor !== undefined && valor !== null && String(valor).trim() !== '') {
+            return String(valor).trim();
+        }
+    }
+    return '';
+}
+
+function obtenerSlugNegocio(negocio) {
+    return obtenerPrimerCampo(negocio, ['slug_local', 'slug', 'carpeta_local', 'carpeta', 'nombre_slug']);
+}
+
+function obtenerUrlPublicaNegocio(negocio) {
+    const urlDirecta = normalizarUrlNegocio(negocio);
+    if (urlDirecta) return urlDirecta.endsWith('/') ? urlDirecta : `${urlDirecta}/`;
+
+    const slug = obtenerSlugNegocio(negocio);
+    return slug ? `https://tusalon.github.io/${slug}/` : '';
+}
+
+function obtenerUrlAdminNegocio(negocio) {
+    const urlPublica = obtenerUrlPublicaNegocio(negocio);
+    return urlPublica ? `${urlPublica.replace(/\/$/, '')}/admin.html` : '';
+}
+
 function getVersionUrlNegocio(negocio, carpetaCliente) {
     const urlNegocio = normalizarUrlNegocio(negocio);
 
@@ -1771,6 +1798,83 @@ function enviarWhatsAppSimple(telefono, nombreNegocio, negocioId) {
 }
 
 // Nueva función para registrar último contacto
+function crearMensajeEntregaCliente(negocio) {
+    const nombre = obtenerPrimerCampo(negocio, ['nombre', 'nombre_negocio', 'salon', 'negocio']) || 'tu negocio';
+    const urlPublica = obtenerUrlPublicaNegocio(negocio);
+    const urlAdmin = obtenerUrlAdminNegocio(negocio);
+    const usuario = obtenerPrimerCampo(negocio, ['usuario', 'admin_usuario', 'username', 'slug', 'slug_local']);
+    const password = obtenerPrimerCampo(negocio, ['password', 'contrasena', 'contraseña', 'admin_password', 'clave']);
+    const fechaPago = obtenerPrimerCampo(negocio, ['proximo_pago', 'fecha_renovacion', 'pagado_hasta']);
+
+    return [
+        `Hola 😊 ya quedó listo ${nombre} en RservasRoma.`,
+        '',
+        'Este es el enlace para que tus clientas puedan reservar:',
+        urlPublica || 'Enlace pendiente de confirmar',
+        '',
+        'Panel de administración:',
+        urlAdmin || 'Panel pendiente de confirmar',
+        '',
+        `Usuario: ${usuario || 'pendiente de confirmar'}`,
+        `Contraseña: ${password || 'pendiente de confirmar'}`,
+        '',
+        'Puedes entrar al panel para revisar tus reservas, crear citas manuales, editar servicios, profesionales, horarios, colores y datos del negocio.',
+        '',
+        'La app ya queda preparada para que tus clientas elijan servicio, fecha y horario disponible sin tener que escribirte primero.',
+        '',
+        'Incluye recordatorios, estadísticas, control de clientes, disponibilidad semanal/mensual y herramientas de RomaFinanzas para revisar si tus servicios dejan ganancia.',
+        '',
+        fechaPago ? `Tu acceso queda activo/pagado hasta: ${fechaPago}` : 'La prueba inicial queda activa por 15 días.',
+        '',
+        'Cuando la pruebes, me avisas cualquier ajuste que quieras hacer y lo revisamos.'
+    ].join('\n');
+}
+
+async function copiarTextoSeguro(texto) {
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(texto);
+            return true;
+        }
+    } catch (error) {
+        console.warn('No se pudo copiar con clipboard:', error);
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = texto;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const copiado = document.execCommand('copy');
+    textarea.remove();
+    return copiado;
+}
+
+async function generarMensajeCliente(negocio) {
+    const mensaje = crearMensajeEntregaCliente(negocio);
+    const copiado = await copiarTextoSeguro(mensaje);
+    const telefono = obtenerPrimerCampo(negocio, ['telefono', 'whatsapp', 'telefono_negocio']);
+    const numeroLimpio = telefono.replace(/\D/g, '');
+
+    if (copiado) {
+        alert('Mensaje copiado. Puedes pegarlo en WhatsApp o editarlo antes de enviarlo.');
+    } else {
+        prompt('Copia este mensaje para enviarlo al cliente:', mensaje);
+    }
+
+    if (numeroLimpio) {
+        let numeroFinal = numeroLimpio;
+        if (!numeroFinal.startsWith('53') && numeroFinal.length === 8) {
+            numeroFinal = '53' + numeroFinal;
+        }
+        if (confirm('Abrir WhatsApp con este mensaje?')) {
+            window.open(`https://wa.me/${numeroFinal}?text=${encodeURIComponent(mensaje)}`, '_blank');
+        }
+    }
+}
+
 function registrarUltimoContacto(negocioId, tipo) {
     const fecha = new Date();
     const fechaFormateada = `${fecha.getDate()}/${fecha.getMonth() + 1}/${fecha.getFullYear()} ${fecha.getHours()}:${String(fecha.getMinutes()).padStart(2, '0')}`;
@@ -2352,6 +2456,8 @@ function renderListaNegocios(negocios) {
                         <button onclick="window.enviarWhatsAppSimple('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💚 WhatsApp Hola</button>
                         ${ultimoHola ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoHola}</span>` : ''}
                     </div>
+
+                    <button onclick="window.generarMensajeCliente(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Mensaje cliente</button>
                     
                     <button onclick="window.notificarNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🔔 Notificar</button>
                     
@@ -2624,6 +2730,7 @@ window.borrarNegocioCompleto = borrarNegocioCompleto;
 window.extenderFechaPago = extenderFechaPago;
 window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
+window.generarMensajeCliente = generarMensajeCliente;
 window.notificarNegocio = notificarNegocio;
 window.notificarVencimiento = notificarVencimiento;  
 window.prepararActualizacionNegocio = prepararActualizacionNegocio;
