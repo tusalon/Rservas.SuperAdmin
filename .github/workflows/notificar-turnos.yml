@@ -40,7 +40,7 @@ jobs:
           fi
 
           cuba_hour="$(TZ=America/Havana date +%H)"
-          if [ "$cuba_hour" = "06" ]; then
+          if [ "$cuba_hour" = "06" ] || [ "$cuba_hour" = "08" ]; then
             echo "value=today" >> "$GITHUB_OUTPUT"
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           elif [ "$cuba_hour" = "21" ]; then
