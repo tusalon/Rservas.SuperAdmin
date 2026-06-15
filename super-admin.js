@@ -2247,6 +2247,7 @@ function renderHeader() {
             <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
                 <div class="flex gap-2 flex-wrap">
                     <button onclick="notificarATodos()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">📢 Notificar a TODOS</button>
+                    <button onclick="notificarTurnosHoy()" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm transition font-bold">Turnos Hoy</button>
                     <button onclick="notificarTurnosManana()" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">🔔 Turnos Mañana</button>
                 </div>
                 <span class="text-xs text-gray-500">💰 ${PRECIO_MENSUAL} CUP/mes | ⏱️ +${DIAS_POR_DEFECTO} días</span>
@@ -2541,7 +2542,12 @@ function formatTo12Hour(timeStr) {
     return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
-async function notificarTurnosManana() {
+async function notificarTurnosPorFecha(diasAdelante = 1) {
+    const esHoy = diasAdelante === 0;
+    const etiquetaDia = esHoy ? 'hoy' : 'mañana';
+    const selectorBoton = esHoy ? 'button[onclick="notificarTurnosHoy()"]' : 'button[onclick="notificarTurnosManana()"]';
+    const textoBotonFallback = esHoy ? 'Turnos Hoy' : '🔔 Turnos Mañana';
+
     // 1. Obtener todos los activos/trial
     const elegibles = negociosData.filter(n => n.estado_suscripcion === 'activa' || n.estado_suscripcion === 'trial');
     
@@ -2550,33 +2556,33 @@ async function notificarTurnosManana() {
         return;
     }
 
-    const manana = new Date();
-    manana.setDate(manana.getDate() + 1);
-    manana.setHours(0, 0, 0, 0);
+    const fechaObjetivo = new Date();
+    fechaObjetivo.setDate(fechaObjetivo.getDate() + diasAdelante);
+    fechaObjetivo.setHours(0, 0, 0, 0);
     
-    const year = manana.getFullYear();
-    const month = String(manana.getMonth() + 1).padStart(2, '0');
-    const day = String(manana.getDate()).padStart(2, '0');
-    const mananaSQL = `${year}-${month}-${day}`;
+    const year = fechaObjetivo.getFullYear();
+    const month = String(fechaObjetivo.getMonth() + 1).padStart(2, '0');
+    const day = String(fechaObjetivo.getDate()).padStart(2, '0');
+    const fechaSQL = `${year}-${month}-${day}`;
     
     const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const diaSemana = dias[manana.getDay()];
+    const diaSemana = dias[fechaObjetivo.getDay()];
     const diaSemanaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
-    const fechaLegible = `${diaSemanaCapitalizado} ${manana.getDate()} de ${meses[manana.getMonth()]} de ${year}`;
+    const fechaLegible = `${diaSemanaCapitalizado} ${fechaObjetivo.getDate()} de ${meses[fechaObjetivo.getMonth()]} de ${year}`;
 
     try {
-        // 2. Traer SOLO los turnos de mañana que estén "Reservados"
+        // 2. Traer SOLO los turnos del día elegido que estén "Reservados"
         const { data: turnos, error } = await window.supabase
             .from('reservas')
             .select('negocio_id, cliente_nombre, cliente_whatsapp, servicio, profesional_nombre, hora_inicio')
-            .eq('fecha', mananaSQL)
+            .eq('fecha', fechaSQL)
             .eq('estado', 'Reservado'); 
 
         if (error) throw error;
 
         if (!turnos || turnos.length === 0) {
-            alert('No hay NINGÚN turno registrado para el día de mañana en todo el sistema.');
+            alert(`No hay NINGÚN turno registrado para ${etiquetaDia} en todo el sistema.`);
             return;
         }
 
@@ -2591,14 +2597,14 @@ async function notificarTurnosManana() {
         const negociosConTurnos = elegibles.filter(neg => turnosPorNegocio[neg.id] && turnosPorNegocio[neg.id].length > 0);
 
         if (negociosConTurnos.length === 0) {
-            alert('Ninguno de los negocios activos tiene turnos para mañana.');
+            alert(`Ninguno de los negocios activos tiene turnos para ${etiquetaDia}.`);
             return;
         }
 
-        if (!confirm(`🔔 ¿Notificar turnos a los ${negociosConTurnos.length} negocios que SÍ tienen reservas mañana?\n\n(Se han descartado los que tienen la agenda vacía para ahorrar tiempo)`)) return;
+        if (!confirm(`🔔 ¿Notificar turnos a los ${negociosConTurnos.length} negocios que SÍ tienen reservas ${etiquetaDia}?\n\n(Se han descartado los que tienen la agenda vacía para ahorrar tiempo)`)) return;
 
-        const btnNotificar = document.querySelector('button[onclick="notificarTurnosManana()"]');
-        const textoOriginalBtn = btnNotificar ? btnNotificar.innerHTML : '🔔 Turnos Mañana';
+        const btnNotificar = document.querySelector(selectorBoton);
+        const textoOriginalBtn = btnNotificar ? btnNotificar.innerHTML : textoBotonFallback;
         if (btnNotificar) btnNotificar.innerHTML = `⏳ Procesando 0/${negociosConTurnos.length}...`;
 
         // 4. Buscar solo los topics de los negocios que sí tienen turnos
@@ -2636,7 +2642,7 @@ async function notificarTurnosManana() {
 
             temasUsados.add(ntfyTopic);
 
-            const tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para mañana`;
+            const tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para ${etiquetaDia}`;
             
             const porProfesional = {};
             const porServicio = {};
@@ -2712,10 +2718,18 @@ async function notificarTurnosManana() {
         alert(reporteFinal);
         
     } catch (error) {
-        const btnNotificar = document.querySelector('button[onclick="notificarTurnosManana()"]');
-        if (btnNotificar) btnNotificar.innerHTML = '🔔 Turnos Mañana';
+        const btnNotificar = document.querySelector(selectorBoton);
+        if (btnNotificar) btnNotificar.innerHTML = textoBotonFallback;
         alert('❌ Error general: ' + error.message);
     }
+}
+
+async function notificarTurnosHoy() {
+    return notificarTurnosPorFecha(0);
+}
+
+async function notificarTurnosManana() {
+    return notificarTurnosPorFecha(1);
 }
 
 // Exponer funciones globales
@@ -2752,6 +2766,7 @@ window.logout = logout;
 window.cambiarOrden = cambiarOrden;
 window.togglePendiente = togglePendiente;
 window.toggleEliminado = toggleEliminado;
+window.notificarTurnosHoy = notificarTurnosHoy;
 window.notificarTurnosManana = notificarTurnosManana;
 
 // ==================== INICIALIZACIÓN ====================
