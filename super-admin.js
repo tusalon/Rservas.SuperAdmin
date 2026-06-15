@@ -1589,8 +1589,8 @@ async function borrarRegistrosPorNegocio({ table, column, label }, negocioId) {
 function limpiarEstadoLocalNegocio(id) {
     pendientesLocal = pendientesLocal.filter(negocioId => negocioId !== id);
     eliminadosLocal = eliminadosLocal.filter(negocioId => negocioId !== id);
-    localStorage.setItem(PENDIENTES_KEY, JSON.stringify(pendientesLocal));
-    localStorage.setItem(ELIMINADOS_KEY, JSON.stringify(eliminadosLocal));
+    localStorage.setItem('pendientes_admin', JSON.stringify(pendientesLocal));
+    localStorage.setItem('eliminados_admin', JSON.stringify(eliminadosLocal));
 }
 
 async function borrarNegocioCompleto(id, nombreNegocio) {
