@@ -1,9 +1,5 @@
-const CACHE_NAME = 'rservas-admin-v9';
+const CACHE_NAME = 'rservas-admin-v10';
 const urlsToCache = [
-  'index.html',
-  'login.html',
-  'supabase-config.js',
-  'super-admin.js',
   'manifest.json',
   'icons/icon-72x72.png',
   'icons/icon-96x96.png',
@@ -44,6 +40,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = event.request.url;
+  const requestUrl = new URL(url);
   
   // Ignorar extensiones de Chrome
   if (url.startsWith('chrome-extension://')) {
@@ -55,6 +52,18 @@ self.addEventListener('fetch', event => {
   if (url.includes('ntfy.sh')) return;
   if (url.includes('tailwindcss.com')) return;
   if (url.includes('cdn.')) return;
+
+  // El panel y sus scripts deben salir siempre de red para no usar una version vieja.
+  if (
+    event.request.mode === 'navigate' ||
+    requestUrl.pathname.endsWith('/index.html') ||
+    requestUrl.pathname.endsWith('/login.html') ||
+    requestUrl.pathname.endsWith('/super-admin.js') ||
+    requestUrl.pathname.endsWith('/supabase-config.js')
+  ) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)
