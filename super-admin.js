@@ -1537,14 +1537,11 @@ async function inactivarNegocio(id, nombreNegocio) {
 }
 
 const TABLAS_BORRADO_NEGOCIO = [
-    { table: 'listas_espera', column: 'negocio_id', label: 'Listas de espera' },
     { table: 'lista_espera', column: 'negocio_id', label: 'Lista de espera' },
     { table: 'push_subscriptions', column: 'negocio_id', label: 'Suscripciones push' },
-    { table: 'notificaciones_push', column: 'negocio_id', label: 'Notificaciones push' },
     { table: 'clientes_bloqueados', column: 'negocio_id', label: 'Clientes bloqueados' },
     { table: 'reservas', column: 'negocio_id', label: 'Reservas' },
-    { table: 'clientes', column: 'negocio_id', label: 'Clientes' },
-    { table: 'profesional_servicios', column: 'negocio_id', label: 'Asignaciones profesional-servicio' },
+    { table: 'clientes_autorizados', column: 'negocio_id', label: 'Clientes autorizados' },
     { table: 'horarios_profesionales', column: 'negocio_id', label: 'Horarios profesionales' },
     { table: 'profesionales', column: 'negocio_id', label: 'Profesionales' },
     { table: 'servicios', column: 'negocio_id', label: 'Servicios' },
