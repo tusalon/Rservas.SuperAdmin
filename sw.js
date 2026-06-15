@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rservas-admin-v8';
+const CACHE_NAME = 'rservas-admin-v9';
 const urlsToCache = [
   'index.html',
   'login.html',
