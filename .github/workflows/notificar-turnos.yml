@@ -55,7 +55,6 @@ jobs:
         if: steps.target.outputs.should_run == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           NTFY_TOPIC_GLOBAL: ${{ secrets.NTFY_TOPIC_GLOBAL }}
         run: node tools/notificar-turnos.js --target "${{ steps.target.outputs.value }}"
 
