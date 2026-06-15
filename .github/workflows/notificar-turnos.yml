@@ -1,0 +1,64 @@
+name: Notificar turnos por NTFY
+
+on:
+  schedule:
+    # GitHub Actions usa UTC. Corremos cada hora y el job solo envia
+    # cuando en Cuba son las 6:00 AM o las 9:00 PM.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Dia a notificar
+        required: true
+        default: tomorrow
+        type: choice
+        options:
+          - today
+          - tomorrow
+
+jobs:
+  notificar-turnos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Definir envio automatico
+        id: target
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          cuba_hour="$(TZ=America/Havana date +%H)"
+          if [ "$cuba_hour" = "06" ]; then
+            echo "value=today" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$cuba_hour" = "21" ]; then
+            echo "value=tomorrow" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=skip" >> "$GITHUB_OUTPUT"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enviar notificaciones
+        if: steps.target.outputs.should_run == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NTFY_TOPIC_GLOBAL: ${{ secrets.NTFY_TOPIC_GLOBAL }}
+        run: node tools/notificar-turnos.js --target "${{ steps.target.outputs.value }}"
+
+      - name: Saltar fuera de horario
+        if: steps.target.outputs.should_run != 'true'
+        run: echo "No es hora de notificar en Cuba."
