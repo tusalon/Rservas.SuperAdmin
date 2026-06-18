@@ -2,9 +2,9 @@ name: Notificar turnos por NTFY
 
 on:
   schedule:
-    # GitHub Actions usa UTC. Corremos cada hora y el job solo envia
-    # cuando en Cuba son las 6:00 AM o las 9:00 PM.
-    - cron: '0 * * * *'
+    # GitHub Actions usa UTC. Estas ventanas cubren Cuba en horario normal
+    # y horario de verano; el paso de abajo filtra exactamente 8:00 AM y 9:00 PM.
+    - cron: '0 1,2,12,13 * * *'
   workflow_dispatch:
     inputs:
       target:
@@ -40,7 +40,7 @@ jobs:
           fi
 
           cuba_hour="$(TZ=America/Havana date +%H)"
-          if [ "$cuba_hour" = "06" ] || [ "$cuba_hour" = "08" ]; then
+          if [ "$cuba_hour" = "08" ]; then
             echo "value=today" >> "$GITHUB_OUTPUT"
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           elif [ "$cuba_hour" = "21" ]; then
