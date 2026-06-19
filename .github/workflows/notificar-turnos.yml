@@ -2,9 +2,13 @@ name: Notificar turnos por NTFY
 
 on:
   schedule:
-    # GitHub Actions usa UTC. Estas ventanas cubren Cuba en horario normal
-    # y horario de verano; el paso de abajo filtra exactamente 8:00 AM y 9:00 PM.
-    - cron: '0 1,2,12,13 * * *'
+    # GitHub Actions usa UTC.
+    # Cuba UTC-4: 8:00 AM = 12:00 UTC, 9:00 PM = 01:00 UTC.
+    - cron: '0 12 * * *'
+    - cron: '0 1 * * *'
+    # Cuba UTC-5: 8:00 AM = 13:00 UTC, 9:00 PM = 02:00 UTC.
+    - cron: '0 13 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       target:
@@ -39,11 +43,18 @@ jobs:
             exit 0
           fi
 
-          cuba_hour="$(TZ=America/Havana date +%H)"
-          if [ "$cuba_hour" = "08" ]; then
+          event_schedule="${{ github.event.schedule }}"
+          cuba_offset="$(TZ=America/Havana date +%z)"
+
+          echo "Schedule recibido: $event_schedule"
+          echo "Offset Cuba actual: $cuba_offset"
+
+          if { [ "$cuba_offset" = "-0400" ] && [ "$event_schedule" = "0 12 * * *" ]; } || \
+             { [ "$cuba_offset" = "-0500" ] && [ "$event_schedule" = "0 13 * * *" ]; }; then
             echo "value=today" >> "$GITHUB_OUTPUT"
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$cuba_hour" = "21" ]; then
+          elif { [ "$cuba_offset" = "-0400" ] && [ "$event_schedule" = "0 1 * * *" ]; } || \
+               { [ "$cuba_offset" = "-0500" ] && [ "$event_schedule" = "0 2 * * *" ]; }; then
             echo "value=tomorrow" >> "$GITHUB_OUTPUT"
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
