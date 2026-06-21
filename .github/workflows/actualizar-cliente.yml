@@ -1,0 +1,62 @@
+name: Actualizar cliente desde Exotic
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: Repo del cliente (ej. dnailspassion)
+        required: true
+        type: string
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar SuperAdmin
+        uses: actions/checkout@v4
+        with:
+          path: superadmin
+
+      - name: Clonar exoticnailsbyyuli (fuente)
+        uses: actions/checkout@v4
+        with:
+          repository: tusalon/exoticnailsbyyuli
+          token: ${{ secrets.GH_TOKEN }}
+          path: fuente
+
+      - name: Clonar cliente (destino)
+        uses: actions/checkout@v4
+        with:
+          repository: tusalon/${{ inputs.repo }}
+          token: ${{ secrets.GH_TOKEN }}
+          path: cliente
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Sincronizar archivos desde Exotic
+        run: |
+          node superadmin/tools/update-client-from-exotic.js \
+            --base ./fuente \
+            --target ./cliente \
+            --apply
+
+      - name: Marcar version
+        run: |
+          node superadmin/tools/mark-client-version.js \
+            --target ./cliente \
+            --apply
+
+      - name: Commit y push
+        run: |
+          cd cliente
+          git config user.name "RservasRoma Bot"
+          git config user.email "rservasroma@gmail.com"
+          git add -A
+          git restore --staged android/ 2>/dev/null || true
+          git restore --staged "supabase/.temp/" 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "Actualizar logica de reservas"
+          git push

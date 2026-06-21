@@ -1173,8 +1173,9 @@ function renderLotesActualizacion() {
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button onclick="window.cargarLoteActualizacion('${escapeHtml(lote.id)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1.5 rounded-lg text-sm font-medium">Cargar</button>
-                    <button onclick="window.prepararActualizacionLote('${escapeHtml(lote.id)}', false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold">Copiar app</button>
-                    <button onclick="window.prepararActualizacionLote('${escapeHtml(lote.id)}', true)" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-bold">App + APK</button>
+                    <button onclick="window.actualizarLoteEnNube('${escapeHtml(lote.id)}')" class="bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold">☁️ En nube</button>
+                    <button onclick="window.prepararActualizacionLote('${escapeHtml(lote.id)}', false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold">CMD app</button>
+                    <button onclick="window.prepararActualizacionLote('${escapeHtml(lote.id)}', true)" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-bold">CMD + APK</button>
                     <button onclick="window.eliminarLoteActualizacion('${escapeHtml(lote.id)}')" class="bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium">Eliminar</button>
                 </div>
             </div>
@@ -2100,6 +2101,7 @@ function renderHeader() {
                 </div>
                 <div class="flex gap-2 flex-wrap">
                     <button onclick="filtrarPorEstado('sin_carpeta')" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">Revisar sin carpeta (${totalPorEstado.sin_carpeta})</button>
+                    <button onclick="window.configurarTokenGitHub()" class="${tieneTokenGitHub() ? 'bg-sky-600 hover:bg-sky-700' : 'bg-amber-500 hover:bg-amber-600'} text-white px-4 py-2 rounded-lg text-sm transition font-bold" title="Token necesario para actualizar en nube">${tieneTokenGitHub() ? '☁️ GitHub OK' : '⚠️ Token GitHub'}</button>
                     <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">📥 Exportar CSV</button>
                     <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Actualizar</button>
                     <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">🚪 Cerrar Sesión</button>
@@ -2240,8 +2242,9 @@ function renderListaNegocios(negocios) {
                     <button onclick="window.limpiarSeleccionActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Limpiar</button>
                     <button onclick="window.guardarSeleccionComoLote()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Guardar lote</button>
                     <button onclick="window.guardarSeleccionEnLotesDeDiez()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-4 py-2 rounded-lg text-sm font-bold">Guardar lotes de 10</button>
-                    <button onclick="window.prepararActualizacionSeleccionada(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar seleccion app</button>
-                    <button onclick="window.prepararActualizacionSeleccionada(true)" class="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold">Seleccion + APK</button>
+                    <button onclick="window.actualizarSeleccionadosEnNube()" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-bold">☁️ Actualizar en nube</button>
+                    <button onclick="window.prepararActualizacionSeleccionada(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">CMD app</button>
+                    <button onclick="window.prepararActualizacionSeleccionada(true)" class="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold">CMD + APK</button>
                 </div>
             </div>
             <div class="border-t pt-3">
@@ -2379,9 +2382,11 @@ function renderListaNegocios(negocios) {
                     
                     <button onclick="window.abrirModalPagadoHasta('${n.id}', '${n.nombre.replace(/'/g, "\\'")}', '${n.proximo_pago || ''}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Pagado hasta</button>
 
-                    <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar app</button>
+                    <button id="btn-nube-${n.id}" onclick="window.actualizarClienteEnNube(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition flex-1 md:flex-none text-center" ${carpetaCliente ? '' : 'disabled title="Sin carpeta detectada"'}>☁️ Actualizar</button>
 
-                    <button onclick="window.prepararActualizacionNegocioConApk(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar + APK</button>
+                    <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">CMD app</button>
+
+                    <button onclick="window.prepararActualizacionNegocioConApk(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">CMD + APK</button>
                     
                     <div class="flex flex-col gap-1">
                         <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
@@ -2671,6 +2676,140 @@ async function notificarTurnosManana() {
     return notificarTurnosPorFecha(1);
 }
 
+// ==================== TOKEN GITHUB ====================
+function configurarTokenGitHub() {
+    const actual = localStorage.getItem('gh_token_superadmin') || '';
+    const nuevo = prompt('Token de GitHub (ghp_...):\n\nSe guarda solo en este navegador, nunca en el servidor.', actual);
+    if (nuevo === null) return;
+    if (!nuevo.trim()) {
+        localStorage.removeItem('gh_token_superadmin');
+        window.GH_TOKEN = '';
+        alert('Token eliminado.');
+    } else {
+        localStorage.setItem('gh_token_superadmin', nuevo.trim());
+        window.GH_TOKEN = nuevo.trim();
+        alert('✅ Token guardado. Ya puedes usar "Actualizar en nube".');
+    }
+}
+
+function tieneTokenGitHub() {
+    return Boolean(window.GH_TOKEN);
+}
+
+// ==================== ACTUALIZACIÓN EN NUBE ====================
+async function dispararWorkflowActualizacion(repoSlug) {
+    const url = `https://api.github.com/repos/${window.GH_OWNER}/${window.GH_SUPERADMIN_REPO}/actions/workflows/actualizar-cliente.yml/dispatches`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            Authorization: `token ${window.GH_TOKEN}`,
+            Accept: 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ref: 'main', inputs: { repo: repoSlug } })
+    });
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`GitHub API ${response.status}: ${text}`);
+    }
+}
+
+async function obtenerEstadoUltimoWorkflowActualizacion(repoSlug) {
+    const url = `https://api.github.com/repos/${window.GH_OWNER}/${window.GH_SUPERADMIN_REPO}/actions/workflows/actualizar-cliente.yml/runs?per_page=5`;
+    const response = await fetch(url, {
+        headers: { Authorization: `token ${window.GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const run = (data.workflow_runs || []).find(r => {
+        try { return JSON.parse(r.display_title || '{}').repo === repoSlug; } catch { return false; }
+    }) || data.workflow_runs?.[0];
+    return run ? { status: run.status, conclusion: run.conclusion, url: run.html_url, id: run.id } : null;
+}
+
+async function actualizarClienteEnNube(negocio) {
+    if (!tieneTokenGitHub()) {
+        if (confirm('No hay token de GitHub configurado.\n\n¿Configurarlo ahora?')) configurarTokenGitHub();
+        return;
+    }
+    const slug = buscarCarpetaCliente(negocio);
+    if (!slug) {
+        alert(`No se detectó carpeta/repo para ${negocio.nombre}. Verifica el slug del negocio.`);
+        return;
+    }
+
+    if (!confirm(`☁️ Actualizar ${negocio.nombre} desde GitHub Actions?\n\nRepo: ${slug}\n\nNo necesitas abrir CMD ni tener las carpetas locales.`)) return;
+
+    const btn = document.getElementById(`btn-nube-${negocio.id}`);
+    if (btn) { btn.textContent = '⏳ Disparando...'; btn.disabled = true; }
+
+    try {
+        await dispararWorkflowActualizacion(slug);
+        if (btn) { btn.textContent = '✅ En cola'; btn.style.background = '#16a34a'; }
+        setTimeout(() => {
+            if (btn) { btn.textContent = '☁️ Actualizar'; btn.disabled = false; btn.style.background = ''; }
+        }, 5000);
+        alert(`✅ Workflow iniciado para ${negocio.nombre}.\n\nPuedes ver el progreso en:\nhttps://github.com/${window.GH_OWNER}/${window.GH_SUPERADMIN_REPO}/actions`);
+    } catch (error) {
+        if (btn) { btn.textContent = '❌ Error'; btn.disabled = false; }
+        alert(`❌ Error al disparar workflow: ${error.message}`);
+    }
+}
+
+async function actualizarSeleccionadosEnNube() {
+    if (!tieneTokenGitHub()) {
+        if (confirm('No hay token de GitHub configurado.\n\n¿Configurarlo ahora?')) configurarTokenGitHub();
+        return;
+    }
+    const seleccionados = getNegociosSeleccionadosActualizacion();
+    if (seleccionados.length === 0) {
+        alert('Selecciona primero los negocios que quieres actualizar.');
+        return;
+    }
+
+    const conSlug = seleccionados.filter(n => buscarCarpetaCliente(n));
+    const sinSlug = seleccionados.filter(n => !buscarCarpetaCliente(n));
+
+    let msg = `☁️ Actualizar ${conSlug.length} negocio(s) desde GitHub Actions?\n\nSe dispararán ${conSlug.length} workflows en paralelo.`;
+    if (sinSlug.length > 0) msg += `\n\n⚠️ Se omitirán ${sinSlug.length} sin carpeta detectada.`;
+    if (!confirm(msg)) return;
+
+    let enviados = 0, errores = 0;
+    for (const negocio of conSlug) {
+        const slug = buscarCarpetaCliente(negocio);
+        try {
+            await dispararWorkflowActualizacion(slug);
+            enviados++;
+            await new Promise(r => setTimeout(r, 500));
+        } catch {
+            errores++;
+        }
+    }
+
+    alert(`✅ Workflows disparados:\n📨 Iniciados: ${enviados}\n❌ Errores: ${errores}\n\nRevisa el progreso en:\nhttps://github.com/${window.GH_OWNER}/${window.GH_SUPERADMIN_REPO}/actions`);
+}
+
+async function actualizarLoteEnNube(loteId) {
+    const lote = cargarLotesActualizacion().find(item => String(item.id) === String(loteId));
+    if (!lote) { alert('No se encontró ese lote.'); return; }
+
+    const negocios = getNegociosPorIds(lote.ids || []);
+    const conSlug = negocios.filter(n => buscarCarpetaCliente(n));
+
+    if (!confirm(`☁️ Actualizar lote "${lote.nombre}" (${conSlug.length} negocios) desde GitHub Actions?`)) return;
+
+    let enviados = 0, errores = 0;
+    for (const negocio of conSlug) {
+        try {
+            await dispararWorkflowActualizacion(buscarCarpetaCliente(negocio));
+            enviados++;
+            await new Promise(r => setTimeout(r, 500));
+        } catch { errores++; }
+    }
+
+    alert(`✅ Lote "${lote.nombre}" enviado a la nube.\n📨 Iniciados: ${enviados}\n❌ Errores: ${errores}`);
+}
+
 // Exponer funciones globales
 window.buscarNegocio = buscarNegocio;
 window.limpiarBusqueda = limpiarBusqueda;
@@ -2706,6 +2845,10 @@ window.togglePendiente = togglePendiente;
 window.toggleEliminado = toggleEliminado;
 window.notificarTurnosHoy = notificarTurnosHoy;
 window.notificarTurnosManana = notificarTurnosManana;
+window.configurarTokenGitHub = configurarTokenGitHub;
+window.actualizarClienteEnNube = actualizarClienteEnNube;
+window.actualizarSeleccionadosEnNube = actualizarSeleccionadosEnNube;
+window.actualizarLoteEnNube = actualizarLoteEnNube;
 
 // ==================== INICIALIZACIÓN ====================
 async function init() {

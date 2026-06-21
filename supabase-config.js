@@ -11,4 +11,8 @@ window.supabase = window.supabase.createClient(
     SUPABASE_ANON_KEY
 );
 
+window.GH_TOKEN = localStorage.getItem('gh_token_superadmin') || '';
+window.GH_OWNER = 'tusalon';
+window.GH_SUPERADMIN_REPO = 'Rservas.SuperAdmin';
+
 console.log('✅ Configuración de Supabase cargada correctamente');
