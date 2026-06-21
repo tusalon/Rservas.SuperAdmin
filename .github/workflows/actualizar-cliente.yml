@@ -7,6 +7,11 @@ on:
         description: Repo del cliente (ej. dnailspassion)
         required: true
         type: string
+      con_apk:
+        description: Tambien construir APK Android
+        required: false
+        default: 'false'
+        type: string
 
 jobs:
   actualizar:
@@ -58,5 +63,10 @@ jobs:
           git add -A
           git restore --staged android/ 2>/dev/null || true
           git restore --staged "supabase/.temp/" 2>/dev/null || true
-          git diff --cached --quiet || git commit -m "Actualizar logica de reservas"
+          if [ "${{ inputs.con_apk }}" = "true" ]; then
+            MSG="Actualizar logica de reservas"
+          else
+            MSG="Actualizar logica de reservas [skip actions]"
+          fi
+          git diff --cached --quiet || git commit -m "$MSG"
           git push
