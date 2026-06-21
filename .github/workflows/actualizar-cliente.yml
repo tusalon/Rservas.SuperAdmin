@@ -26,7 +26,7 @@ jobs:
       - name: Clonar exoticnailsbyyuli (fuente)
         uses: actions/checkout@v4
         with:
-          repository: tusalon/exoticnailsbyyuli
+          repository: tusalon/exoticnailsbyyuly
           token: ${{ secrets.GH_TOKEN }}
           path: fuente
 
