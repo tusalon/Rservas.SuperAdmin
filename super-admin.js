@@ -1655,44 +1655,6 @@ async function borrarNegocioCompleto(id, nombreNegocio) {
     }
 }
 
-async function extenderFechaPago(id, nombreNegocio) {
-    const diasExtras = prompt(`📅 Extender pago de ${nombreNegocio}\n\nDías a extender (recomendado: ${DIAS_POR_DEFECTO}):`, DIAS_POR_DEFECTO);
-    if (!diasExtras) return;
-    
-    const diasNum = parseInt(diasExtras);
-    if (isNaN(diasNum) || diasNum <= 0) {
-        alert('❌ Ingrese un número de días válido');
-        return;
-    }
-    
-    const nuevaFecha = calcularFechaMasDias(diasNum);
-    const nuevoMonto = prompt(`💰 Monto del pago en CUP:\n\nMonto actual: ${PRECIO_MENSUAL} CUP`, PRECIO_MENSUAL);
-    if (!nuevoMonto) return;
-    
-    const montoNum = parseFloat(nuevoMonto);
-    if (isNaN(montoNum) || montoNum <= 0) {
-        alert('❌ Monto inválido');
-        return;
-    }
-    
-    try {
-        const { error } = await window.supabase
-            .from('suscripciones')
-            .update({ 
-                fecha_renovacion: nuevaFecha,
-                monto_ultimo_pago: montoNum,
-                fecha_ultimo_pago: new Date().toISOString()
-            })
-            .eq('negocio_id', id);
-        
-        if (error) throw error;
-        alert(`✅ Fecha actualizada: ${nuevaFecha}\n💰 Monto: ${montoNum} CUP`);
-        location.reload();
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
-    }
-}
-
 // FUNCIÓN WHATSAPP ORIGINAL (con mensaje de soporte)
 function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
     const fechaBase = fechaActual || calcularFechaMasDias(DIAS_POR_DEFECTO);
@@ -1827,31 +1789,9 @@ function crearMensajeEntregaCliente(negocio) {
     ].join('\n');
 }
 
-async function copiarTextoSeguro(texto) {
-    try {
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(texto);
-            return true;
-        }
-    } catch (error) {
-        console.warn('No se pudo copiar con clipboard:', error);
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = texto;
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    const copiado = document.execCommand('copy');
-    textarea.remove();
-    return copiado;
-}
-
 async function generarMensajeCliente(negocio) {
     const mensaje = crearMensajeEntregaCliente(negocio);
-    const copiado = await copiarTextoSeguro(mensaje);
+    const copiado = await copiarAlPortapapeles(mensaje);
     const telefono = obtenerPrimerCampo(negocio, ['telefono', 'whatsapp', 'telefono_negocio']);
     const numeroLimpio = telefono.replace(/\D/g, '');
 
@@ -2212,7 +2152,7 @@ function renderHeader() {
                     <div class="text-gray-600 text-xs">📅 Reservas (mes)</div>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-orange-600">${stats.reservasSemana}</div>
+                    <div class="text-2xl font-bold text-orange-600">${stats.porVencer}</div>
                     <div class="text-gray-600 text-xs">⚠️ Vencen 7d</div>
                 </div>
             </div>
@@ -2437,8 +2377,6 @@ function renderListaNegocios(negocios) {
                     ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">▶️ Reactivar</button>` : ''}
                     ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
                     
-                    <button onclick="window.extenderFechaPago('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">📅 Extender</button>
-
                     <button onclick="window.abrirModalPagadoHasta('${n.id}', '${n.nombre.replace(/'/g, "\\'")}', '${n.proximo_pago || ''}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Pagado hasta</button>
 
                     <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Actualizar app</button>
@@ -2553,20 +2491,24 @@ async function notificarTurnosPorFecha(diasAdelante = 1) {
         return;
     }
 
-    const fechaObjetivo = new Date();
-    fechaObjetivo.setDate(fechaObjetivo.getDate() + diasAdelante);
-    fechaObjetivo.setHours(0, 0, 0, 0);
-    
-    const year = fechaObjetivo.getFullYear();
-    const month = String(fechaObjetivo.getMonth() + 1).padStart(2, '0');
-    const day = String(fechaObjetivo.getDate()).padStart(2, '0');
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Havana',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    const partesCuba = Object.fromEntries(formatter.formatToParts(new Date()).map(p => [p.type, p.value]));
+    const baseCuba = new Date(`${partesCuba.year}-${partesCuba.month}-${partesCuba.day}T00:00:00Z`);
+    baseCuba.setUTCDate(baseCuba.getUTCDate() + diasAdelante);
+
+    const year = baseCuba.getUTCFullYear();
+    const month = String(baseCuba.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(baseCuba.getUTCDate()).padStart(2, '0');
     const fechaSQL = `${year}-${month}-${day}`;
-    
+
     const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const diaSemana = dias[fechaObjetivo.getDay()];
+    const diaSemana = dias[baseCuba.getUTCDay()];
     const diaSemanaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
-    const fechaLegible = `${diaSemanaCapitalizado} ${fechaObjetivo.getDate()} de ${meses[fechaObjetivo.getMonth()]} de ${year}`;
+    const fechaLegible = `${diaSemanaCapitalizado} ${baseCuba.getUTCDate()} de ${meses[baseCuba.getUTCMonth()]} de ${year}`;
 
     try {
         // 2. Traer SOLO los turnos del día elegido que estén "Reservados"
@@ -2738,7 +2680,6 @@ window.suspenderNegocio = suspenderNegocio;
 window.reactivarNegocio = reactivarNegocio;
 window.inactivarNegocio = inactivarNegocio;
 window.borrarNegocioCompleto = borrarNegocioCompleto;
-window.extenderFechaPago = extenderFechaPago;
 window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
 window.generarMensajeCliente = generarMensajeCliente;
