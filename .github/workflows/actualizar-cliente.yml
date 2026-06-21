@@ -23,7 +23,28 @@ jobs:
         with:
           path: superadmin
 
-      - name: Clonar exoticnailsbyyuli (fuente)
+      - name: Verificar repo cliente
+        id: find-repo
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          SLUG="${{ inputs.repo }}"
+          OWNER="tusalon"
+          # Probar el slug exacto y variaciones comunes
+          for CANDIDATE in "$SLUG" "${SLUG}-" "-${SLUG}" "${SLUG}_"; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: token $GH_TOKEN" \
+              "https://api.github.com/repos/$OWNER/$CANDIDATE")
+            if [ "$STATUS" = "200" ]; then
+              echo "repo=$CANDIDATE" >> "$GITHUB_OUTPUT"
+              echo "Repo encontrado: $CANDIDATE"
+              exit 0
+            fi
+          done
+          echo "No se encontro repo para slug: $SLUG"
+          exit 1
+
+      - name: Clonar exoticnailsbyyuly (fuente)
         uses: actions/checkout@v4
         with:
           repository: tusalon/exoticnailsbyyuly
@@ -33,7 +54,7 @@ jobs:
       - name: Clonar cliente (destino)
         uses: actions/checkout@v4
         with:
-          repository: tusalon/${{ inputs.repo }}
+          repository: tusalon/${{ steps.find-repo.outputs.repo }}
           token: ${{ secrets.GH_TOKEN }}
           path: cliente
 
