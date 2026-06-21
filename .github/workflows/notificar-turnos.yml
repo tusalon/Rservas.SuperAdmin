@@ -3,11 +3,11 @@ name: Notificar turnos por NTFY
 on:
   schedule:
     # GitHub Actions usa UTC.
-    # Cuba UTC-4: 8:00 AM = 12:00 UTC, 9:00 PM = 01:00 UTC.
-    - cron: '0 12 * * *'
+    # Cuba UTC-4 (verano): 7:00 AM = 11:00 UTC | 9:00 PM = 01:00 UTC
+    - cron: '0 11 * * *'
     - cron: '0 1 * * *'
-    # Cuba UTC-5: 8:00 AM = 13:00 UTC, 9:00 PM = 02:00 UTC.
-    - cron: '0 13 * * *'
+    # Cuba UTC-5 (invierno): 7:00 AM = 12:00 UTC | 9:00 PM = 02:00 UTC
+    - cron: '0 12 * * *'
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
@@ -49,10 +49,12 @@ jobs:
           echo "Schedule recibido: $event_schedule"
           echo "Offset Cuba actual: $cuba_offset"
 
-          if { [ "$cuba_offset" = "-0400" ] && [ "$event_schedule" = "0 12 * * *" ]; } || \
-             { [ "$cuba_offset" = "-0500" ] && [ "$event_schedule" = "0 13 * * *" ]; }; then
+          # 7 AM Cuba -> turnos de hoy
+          if { [ "$cuba_offset" = "-0400" ] && [ "$event_schedule" = "0 11 * * *" ]; } || \
+             { [ "$cuba_offset" = "-0500" ] && [ "$event_schedule" = "0 12 * * *" ]; }; then
             echo "value=today" >> "$GITHUB_OUTPUT"
             echo "should_run=true" >> "$GITHUB_OUTPUT"
+          # 9 PM Cuba -> turnos de manana
           elif { [ "$cuba_offset" = "-0400" ] && [ "$event_schedule" = "0 1 * * *" ]; } || \
                { [ "$cuba_offset" = "-0500" ] && [ "$event_schedule" = "0 2 * * *" ]; }; then
             echo "value=tomorrow" >> "$GITHUB_OUTPUT"
@@ -66,6 +68,7 @@ jobs:
         if: steps.target.outputs.should_run == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           NTFY_TOPIC_GLOBAL: ${{ secrets.NTFY_TOPIC_GLOBAL }}
         run: node tools/notificar-turnos.js --target "${{ steps.target.outputs.value }}"
 
