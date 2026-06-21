@@ -1909,16 +1909,15 @@ async function notificarATodos() {
     const topicsUnicos = Array.from(new Map(
         negociosData.map(n => [(n.ntfy_topic || NTFY_TOPIC_GLOBAL).trim(), n])
     ).entries()).filter(([tema]) => Boolean(tema));
-    const activos = { length: topicsUnicos.length };
-    
+
     if (topicsUnicos.length === 0) {
         alert('⚠️ No hay negocios activos para notificar');
         return;
     }
-    
-    const mensaje = prompt(`📢 Notificar a ${activos.length} negocios activos:\n\nEscribe el mensaje que recibirán todos:`, 'Comunicado importante de Rservas');
+
+    const mensaje = prompt(`📢 Notificar a ${topicsUnicos.length} negocios activos:\n\nEscribe el mensaje que recibirán todos:`, 'Comunicado importante de Rservas');
     if (!mensaje) return;
-    
+
     if (!confirm(`Enviar este mensaje a ${topicsUnicos.length} canales ntfy?\n\n${mensaje}`)) return;
 
     let enviados = 0;
@@ -2715,19 +2714,6 @@ async function dispararWorkflowActualizacion(repoSlug, conApk = false) {
         const text = await response.text();
         throw new Error(`GitHub API ${response.status}: ${text}`);
     }
-}
-
-async function obtenerEstadoUltimoWorkflowActualizacion(repoSlug) {
-    const url = `https://api.github.com/repos/${window.GH_OWNER}/${window.GH_SUPERADMIN_REPO}/actions/workflows/actualizar-cliente.yml/runs?per_page=5`;
-    const response = await fetch(url, {
-        headers: { Authorization: `token ${window.GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    const run = (data.workflow_runs || []).find(r => {
-        try { return JSON.parse(r.display_title || '{}').repo === repoSlug; } catch { return false; }
-    }) || data.workflow_runs?.[0];
-    return run ? { status: run.status, conclusion: run.conclusion, url: run.html_url, id: run.id } : null;
 }
 
 async function actualizarClienteEnNube(negocio, conApk = false) {
