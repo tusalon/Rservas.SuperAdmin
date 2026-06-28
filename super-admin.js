@@ -508,9 +508,71 @@ let versionRenderToken = 0;
 const versionAppCache = {};
 const seleccionActualizacion = new Set();
 const LOTES_ACTUALIZACION_KEY = 'lotes_actualizacion_rservas';
+const CARPETAS_LOCALES_KEY = 'carpetas_locales_clientes';
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
 let ultimaVezEscrito = JSON.parse(localStorage.getItem('ultima_vez_escrito')) || {};
+
+// ==================== CARPETAS LOCALES (localStorage) ====================
+
+function cargarCarpetasLocales() {
+    try { return JSON.parse(localStorage.getItem(CARPETAS_LOCALES_KEY) || '{}'); }
+    catch { return {}; }
+}
+
+function guardarCarpetasLocales(mapa) {
+    localStorage.setItem(CARPETAS_LOCALES_KEY, JSON.stringify(mapa));
+}
+
+function getCarpetaGuardada(negocioId) {
+    return cargarCarpetasLocales()[String(negocioId)] || '';
+}
+
+function setCarpetaGuardada(negocioId, carpeta) {
+    const mapa = cargarCarpetasLocales();
+    const id = String(negocioId);
+    if (carpeta && carpeta.trim()) {
+        mapa[id] = carpeta.trim();
+    } else {
+        delete mapa[id];
+    }
+    guardarCarpetasLocales(mapa);
+}
+
+function exportarCarpetasLocales() {
+    const mapa = cargarCarpetasLocales();
+    const json = JSON.stringify(mapa, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `carpetas-clientes-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function importarCarpetasLocales() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const texto = await file.text();
+            const nuevo = JSON.parse(texto);
+            if (typeof nuevo !== 'object' || Array.isArray(nuevo)) throw new Error('Formato inválido');
+            const actual = cargarCarpetasLocales();
+            const merged = { ...actual, ...nuevo };
+            guardarCarpetasLocales(merged);
+            alert(`✅ Importadas ${Object.keys(nuevo).length} carpetas. Total: ${Object.keys(merged).length}`);
+            if (typeof renderGestionCarpetas === 'function') renderGestionCarpetas();
+        } catch (err) {
+            alert('❌ Error al importar: ' + err.message);
+        }
+    };
+    input.click();
+}
 
 // ==================== VERIFICAR ACCESO ====================
 async function verificarAcceso() {
@@ -906,21 +968,21 @@ function elegirMejorCarpeta(candidata, coincidencias) {
 }
 
 function buscarCarpetaCliente(negocio) {
+    // 1. Prioridad máxima: carpeta guardada manualmente en localStorage
+    const guardada = getCarpetaGuardada(negocio?.id);
+    if (guardada) return guardada;
+
+    // 2. Mapa hardcodeado
     const carpetaPorId = CARPETAS_CLIENTES_POR_NEGOCIO_ID[String(negocio?.id || '').toLowerCase()];
-    if (carpetaPorId) {
-        return carpetaPorId;
-    }
+    if (carpetaPorId) return carpetaPorId;
 
+    // 3. Búsqueda por candidatos (slug, url, nombre, etc.)
     const candidatos = obtenerCandidatosCarpetaNegocio(negocio);
-
     for (const candidata of candidatos) {
         const candidataNormalizada = normalizarParaMatch(candidata);
         if (!candidataNormalizada) continue;
-
         const coincidencias = CARPETAS_CLIENTES.filter(carpeta => normalizarParaMatch(carpeta) === candidataNormalizada);
-        if (coincidencias.length > 0) {
-            return elegirMejorCarpeta(candidata, coincidencias);
-        }
+        if (coincidencias.length > 0) return elegirMejorCarpeta(candidata, coincidencias);
     }
 
     return '';
@@ -1068,20 +1130,21 @@ async function copiarAlPortapapeles(texto) {
 }
 
 async function prepararActualizacionNegocio(negocio) {
-    const sugerida = obtenerCarpetaSugerida(negocio);
-    const carpeta = prompt(
-        `Carpeta local del negocio "${negocio.nombre || 'Sin nombre'}":`,
-        sugerida
-    );
-
-    if (!carpeta) return;
+    // Si ya hay carpeta guardada, la usa directamente sin prompt
+    let carpeta = buscarCarpetaCliente(negocio);
+    if (!carpeta) {
+        const sugerida = obtenerCarpetaSugerida(negocio);
+        carpeta = prompt(`Carpeta local del negocio "${negocio.nombre || 'Sin nombre'}":`, sugerida);
+        if (!carpeta) return;
+    }
+    // Guardar para próximas veces
+    setCarpetaGuardada(negocio.id, carpeta);
 
     const comando = crearComandoActualizarNegocio(carpeta);
-
     try {
         const copiado = await copiarAlPortapapeles(comando);
         if (!copiado) throw new Error('copy-failed');
-        alert('Comando copiado. Pegalo en CMD como administrador para actualizar este negocio desde exoticbyyuly.');
+        alert(`✅ Comando copiado.\nCarpeta: ${carpeta}\nPegalo en CMD como administrador.`);
     } catch (error) {
         console.error('No se pudo copiar el comando:', error);
         prompt('No se pudo copiar automaticamente. Copia este comando:', comando);
@@ -1089,20 +1152,21 @@ async function prepararActualizacionNegocio(negocio) {
 }
 
 async function prepararActualizacionNegocioConApk(negocio) {
-    const sugerida = obtenerCarpetaSugerida(negocio);
-    const carpeta = prompt(
-        `Carpeta local del negocio "${negocio.nombre || 'Sin nombre'}":`,
-        sugerida
-    );
-
-    if (!carpeta) return;
+    // Si ya hay carpeta guardada, la usa directamente sin prompt
+    let carpeta = buscarCarpetaCliente(negocio);
+    if (!carpeta) {
+        const sugerida = obtenerCarpetaSugerida(negocio);
+        carpeta = prompt(`Carpeta local del negocio "${negocio.nombre || 'Sin nombre'}":`, sugerida);
+        if (!carpeta) return;
+    }
+    // Guardar para próximas veces
+    setCarpetaGuardada(negocio.id, carpeta);
 
     const comando = crearComandoActualizarNegocioConApk(carpeta);
-
     try {
         const copiado = await copiarAlPortapapeles(comando);
         if (!copiado) throw new Error('copy-failed');
-        alert('Comando copiado. Pegalo en CMD para actualizar la app, preparar APK, hacer commit y push.');
+        alert(`✅ Comando copiado.\nCarpeta: ${carpeta}\nPegalo en CMD para actualizar app + APK.`);
     } catch (error) {
         console.error('No se pudo copiar el comando:', error);
         prompt('No se pudo copiar automaticamente. Copia este comando:', comando);
@@ -2103,6 +2167,7 @@ function renderHeader() {
                     <button onclick="filtrarPorEstado('sin_carpeta')" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">Revisar sin carpeta (${totalPorEstado.sin_carpeta})</button>
                     <button onclick="window.configurarTokenGitHub()" class="${tieneTokenGitHub() ? 'bg-sky-600 hover:bg-sky-700' : 'bg-amber-500 hover:bg-amber-600'} text-white px-4 py-2 rounded-lg text-sm transition font-bold" title="Token necesario para actualizar en nube">${tieneTokenGitHub() ? '☁️ GitHub OK' : '⚠️ Token GitHub'}</button>
                     <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">📥 Exportar CSV</button>
+                    <button onclick="window.abrirGestionCarpetas()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition font-bold">📁 Carpetas locales</button>
                     <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Actualizar</button>
                     <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">🚪 Cerrar Sesión</button>
                 </div>
@@ -2389,6 +2454,8 @@ function renderListaNegocios(negocios) {
                     <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">CMD app</button>
 
                     <button onclick="window.prepararActualizacionNegocioConApk(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">CMD + APK</button>
+
+                    <button onclick="window.editarCarpetaRapida('${n.id}', '${(n.nombre||'').replace(/'/g,"\\'")}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center" title="Carpeta: ${escapeHtml(carpetaCliente || 'Sin carpeta')}">📁 ${carpetaCliente ? escapeHtml(carpetaCliente) : 'Sin carpeta'}</button>
                     
                     <div class="flex flex-col gap-1">
                         <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
@@ -2835,6 +2902,160 @@ window.togglePendiente = togglePendiente;
 window.toggleEliminado = toggleEliminado;
 window.notificarTurnosHoy = notificarTurnosHoy;
 window.notificarTurnosManana = notificarTurnosManana;
+window.actualizarClienteEnNube = actualizarClienteEnNube;
+window.actualizarSeleccionadosEnNube = actualizarSeleccionadosEnNube;
+window.actualizarLoteEnNube = actualizarLoteEnNube;
+window.configurarTokenGitHub = configurarTokenGitHub;
+window.exportarCarpetasLocales = exportarCarpetasLocales;
+window.importarCarpetasLocales = importarCarpetasLocales;
+window.abrirGestionCarpetas = abrirGestionCarpetas;
+window.guardarCarpetaDesdeUI = guardarCarpetaDesdeUI;
+window.editarCarpetaNegocio = editarCarpetaNegocio;
+window.limpiarCarpetaNegocio = limpiarCarpetaNegocio;
+window.renderGestionCarpetas = renderGestionCarpetas;
+
+// ==================== UI GESTIÓN DE CARPETAS ====================
+
+function abrirGestionCarpetas() {
+    // Crear modal si no existe
+    let modal = document.getElementById('modal-carpetas');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-carpetas';
+        modal.className = 'fixed inset-0 z-50 flex items-start justify-center bg-black/60 overflow-auto py-8';
+        modal.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4">
+                <div class="flex items-center justify-between px-6 py-4 border-b">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900">📁 Carpetas locales de clientes</h2>
+                        <p class="text-xs text-gray-500 mt-0.5">Gestiona qué carpeta local corresponde a cada cliente. Se guarda en este navegador.</p>
+                    </div>
+                    <button onclick="document.getElementById('modal-carpetas').remove()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+                </div>
+                <div class="px-6 py-4 border-b flex flex-wrap gap-2 items-center">
+                    <input id="carpetas-buscador" type="text" placeholder="Buscar cliente..." oninput="renderGestionCarpetas()" class="border rounded-lg px-3 py-2 text-sm flex-1 min-w-48 focus:ring-2 focus:ring-indigo-400 outline-none">
+                    <button onclick="exportarCarpetasLocales()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium">⬇️ Exportar JSON</button>
+                    <button onclick="importarCarpetasLocales()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium">⬆️ Importar JSON</button>
+                </div>
+                <div id="carpetas-lista" class="px-6 py-4 max-h-[60vh] overflow-y-auto"></div>
+                <div class="px-6 py-3 border-t bg-gray-50 rounded-b-2xl">
+                    <p id="carpetas-resumen" class="text-xs text-gray-500"></p>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        // Cerrar al click en backdrop
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    }
+    renderGestionCarpetas();
+}
+
+function renderGestionCarpetas() {
+    const lista = document.getElementById('carpetas-lista');
+    const resumen = document.getElementById('carpetas-resumen');
+    if (!lista) return;
+
+    const buscador = (document.getElementById('carpetas-buscador')?.value || '').toLowerCase().trim();
+    const mapaGuardado = cargarCarpetasLocales();
+    const total = negociosData.length;
+
+    let negocios = [...negociosData];
+    if (buscador) {
+        negocios = negocios.filter(n => {
+            const nombre = (n.nombre || '').toLowerCase();
+            const carpeta = buscarCarpetaCliente(n).toLowerCase();
+            return nombre.includes(buscador) || carpeta.includes(buscador);
+        });
+    }
+
+    // Ordenar: primero los sin carpeta guardada en localStorage
+    negocios.sort((a, b) => {
+        const aGuardada = !!mapaGuardado[String(a.id)];
+        const bGuardada = !!mapaGuardado[String(b.id)];
+        if (aGuardada !== bGuardada) return aGuardada ? 1 : -1;
+        return (a.nombre || '').localeCompare(b.nombre || '');
+    });
+
+    const conGuardada = Object.keys(mapaGuardado).length;
+    const sinCarpeta = negociosData.filter(n => !buscarCarpetaCliente(n)).length;
+
+    if (resumen) {
+        resumen.textContent = `${total} clientes | ${conGuardada} con carpeta guardada en localStorage | ${sinCarpeta} sin ninguna carpeta detectada`;
+    }
+
+    if (negocios.length === 0) {
+        lista.innerHTML = '<p class="text-gray-400 text-sm py-4 text-center">Sin resultados</p>';
+        return;
+    }
+
+    lista.innerHTML = negocios.map(n => {
+        const carpetaActual = buscarCarpetaCliente(n);
+        const guardada = mapaGuardado[String(n.id)];
+        const fuente = guardada ? 'localStorage' : (CARPETAS_CLIENTES_POR_NEGOCIO_ID[String(n.id)] ? 'hardcoded' : carpetaActual ? 'auto' : '');
+        const fuenteColor = fuente === 'localStorage' ? 'bg-green-100 text-green-700' :
+                            fuente === 'hardcoded' ? 'bg-blue-100 text-blue-700' :
+                            fuente === 'auto' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+        const fuenteLabel = fuente || 'sin carpeta';
+
+        return `
+            <div class="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm text-gray-900 truncate">${escapeHtml(n.nombre || n.id)}</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full font-medium ${fuenteColor}">${fuenteLabel}</span>
+                    </div>
+                    <div id="carpeta-display-${n.id}" class="text-xs text-gray-500 mt-0.5 font-mono truncate">${carpetaActual || '—'}</div>
+                    <div id="carpeta-edit-${n.id}" class="hidden mt-1 flex gap-1">
+                        <input id="carpeta-input-${n.id}" type="text" value="${escapeHtml(carpetaActual)}" placeholder="nombre-carpeta" class="border rounded px-2 py-1 text-xs font-mono flex-1 focus:ring-1 focus:ring-indigo-400 outline-none">
+                        <button onclick="guardarCarpetaDesdeUI('${n.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-xs font-bold">OK</button>
+                        <button onclick="cancelarEditCarpeta('${n.id}')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded text-xs">×</button>
+                    </div>
+                </div>
+                <div class="flex gap-1 flex-shrink-0">
+                    <button onclick="editarCarpetaNegocio('${n.id}')" class="text-xs px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-medium">✏️</button>
+                    ${guardada ? `<button onclick="limpiarCarpetaNegocio('${n.id}')" class="text-xs px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded font-medium">🗑</button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function editarCarpetaNegocio(negocioId) {
+    document.getElementById(`carpeta-display-${negocioId}`)?.classList.add('hidden');
+    document.getElementById(`carpeta-edit-${negocioId}`)?.classList.remove('hidden');
+    document.getElementById(`carpeta-input-${negocioId}`)?.focus();
+}
+
+function cancelarEditCarpeta(negocioId) {
+    document.getElementById(`carpeta-display-${negocioId}`)?.classList.remove('hidden');
+    document.getElementById(`carpeta-edit-${negocioId}`)?.classList.add('hidden');
+}
+
+window.cancelarEditCarpeta = cancelarEditCarpeta;
+
+function editarCarpetaRapida(negocioId, nombreNegocio) {
+    const actual = getCarpetaGuardada(negocioId) || buscarCarpetaCliente({ id: negocioId }) || '';
+    const nueva = prompt(`📁 Carpeta local para "${nombreNegocio}"\n(solo el nombre de carpeta, sin ruta completa):`, actual);
+    if (nueva === null) return; // canceló
+    setCarpetaGuardada(negocioId, nueva);
+    // Recargar lista para reflejar cambio
+    renderListaNegocios && renderListaNegocios();
+}
+window.editarCarpetaRapida = editarCarpetaRapida;
+
+function guardarCarpetaDesdeUI(negocioId) {
+    const input = document.getElementById(`carpeta-input-${negocioId}`);
+    if (!input) return;
+    const valor = input.value.trim();
+    setCarpetaGuardada(negocioId, valor);
+    renderGestionCarpetas();
+}
+
+function limpiarCarpetaNegocio(negocioId) {
+    if (!confirm('¿Eliminar la carpeta guardada para este cliente? Volverá a usar la detección automática.')) return;
+    setCarpetaGuardada(negocioId, '');
+    renderGestionCarpetas();
+}nosManana;
 window.configurarTokenGitHub = configurarTokenGitHub;
 window.actualizarClienteEnNube = actualizarClienteEnNube;
 window.actualizarSeleccionadosEnNube = actualizarSeleccionadosEnNube;
