@@ -2,6 +2,11 @@
 // ==================== CONFIGURACIÓN ====================
 const PRECIO_MENSUAL = 1000;
 const DIAS_POR_DEFECTO = 15;
+// Debe coincidir con FECHA_CORTE de rservasroma/utils/suscripcion.js: el panel
+// de la duena ignora todo vencimiento anterior a esta fecha (habia 250 salones
+// con fechas viejas de prueba). Aqui se usa el mismo criterio para que la lista
+// de cobros muestre exactamente a quien el sistema esta bloqueando de verdad.
+const FECHA_CORTE_COBRO = '2026-07-19';
 const WHATSAPP_MENSAJE = "Hola, escribimos desde el soporte de Rservas.Roma para saber en qué podemos ayudarle";
 const NTFY_TOPIC_GLOBAL = "rservas-vencimientos";
 const ADMIN_EMAIL = "rservasroma@gmail.com";
@@ -2135,6 +2140,129 @@ function actualizarBotonesFiltro() {
 }
 
 // ==================== RENDERIZADO DEL HEADER ====================
+// ==================== COBROS DE LA SEMANA ====================
+function _medianocheCobro(fecha) {
+    const d = new Date(fecha);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function diasHastaPago(fecha) {
+    if (!fecha) return null;
+    return Math.round((_medianocheCobro(fecha) - _medianocheCobro(new Date())) / 86400000);
+}
+
+function fechaPagoDe(n) {
+    return n.proximo_pago || n.fecha_renovacion || null;
+}
+
+// Fecha anterior al corte = dato heredado (prueba vieja). El panel de la duena
+// la ignora, asi que aqui tampoco cuenta como deuda.
+function esFechaHeredada(fecha) {
+    return _medianocheCobro(fecha) < _medianocheCobro(FECHA_CORTE_COBRO);
+}
+
+function calcularCobros(negocios) {
+    const bloqueados = [];
+    const porCobrar = [];
+    let heredados = 0;
+
+    (negocios || []).forEach(n => {
+        if (eliminadosLocal.includes(n.id)) return;
+
+        if (n.estado_suscripcion === 'suspendida') {
+            bloqueados.push({ n, dias: null, fecha: fechaPagoDe(n), motivo: 'suspendida' });
+            return;
+        }
+
+        const f = fechaPagoDe(n);
+        if (!f) return;
+        if (esFechaHeredada(f)) { heredados++; return; }
+
+        const d = diasHastaPago(f);
+        if (d <= 0) bloqueados.push({ n, dias: d, fecha: f, motivo: 'vencida' });
+        else if (d <= 7) porCobrar.push({ n, dias: d, fecha: f });
+    });
+
+    porCobrar.sort((a, b) => a.dias - b.dias);
+    bloqueados.sort((a, b) => (a.dias ?? 99) - (b.dias ?? 99));
+    return { bloqueados, porCobrar, heredados };
+}
+
+function _fechaCorta(f) {
+    if (!f) return '—';
+    try {
+        return new Date(f).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    } catch (e) { return String(f).slice(0, 10); }
+}
+
+function _filaCobro(item, tipo) {
+    const n = item.n;
+    const nombreEscapado = (n.nombre || '').replace(/'/g, "\\'");
+    let etiqueta;
+    if (item.motivo === 'suspendida') etiqueta = 'Suspendido a mano';
+    else if (item.dias === 0) etiqueta = 'Vence HOY';
+    else if (item.dias < 0) etiqueta = `Vencido hace ${Math.abs(item.dias)} d`;
+    else if (item.dias === 1) etiqueta = 'Vence MAÑANA';
+    else etiqueta = `En ${item.dias} días`;
+
+    const color = tipo === 'bloqueado' ? 'text-red-700' : 'text-amber-700';
+    const tel = (n.telefono || '').replace(/\D/g, '');
+    const btnWhats = tel
+        ? `<a href="https://wa.me/53${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium">WhatsApp</a>`
+        : '';
+
+    return `
+        <div class="flex items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+            <div class="min-w-0 flex-1">
+                <div class="font-medium text-gray-800 text-sm truncate">${n.nombre || '(sin nombre)'}</div>
+                <div class="text-xs ${color}">${etiqueta} · ${_fechaCorta(item.fecha)}</div>
+            </div>
+            <div class="flex gap-1.5 shrink-0">
+                ${btnWhats}
+                <button onclick="window.abrirModalPagadoHasta('${n.id}', '${nombreEscapado}', '${fechaPagoDe(n) || ''}')"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded text-xs font-medium">Registrar pago</button>
+            </div>
+        </div>
+    `;
+}
+
+function renderSeccionCobros() {
+    const { bloqueados, porCobrar, heredados } = calcularCobros(negociosData);
+    if (bloqueados.length === 0 && porCobrar.length === 0) {
+        return `
+            <div class="mb-6 bg-white rounded-xl shadow p-4 text-sm text-gray-500">
+                💰 <strong class="text-gray-700">Cobros</strong> — nadie vence esta semana ni hay salones bloqueados.
+                ${heredados ? `<span class="text-gray-400">(${heredados} con fechas viejas anteriores al ${_fechaCorta(FECHA_CORTE_COBRO)}: no cuentan hasta que les registres un pago)</span>` : ''}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="bg-red-50 px-4 py-2.5 border-b border-red-100">
+                    <span class="font-bold text-red-700 text-sm">🔒 Bloqueados ahora (${bloqueados.length})</span>
+                    <p class="text-xs text-red-600 mt-0.5">No pueden entrar a su panel. Sus clientas sí reservan.</p>
+                </div>
+                <div class="px-4 py-1 max-h-72 overflow-y-auto">
+                    ${bloqueados.length ? bloqueados.map(i => _filaCobro(i, 'bloqueado')).join('') : '<p class="text-sm text-gray-400 py-3">Ninguno 🎉</p>'}
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="bg-amber-50 px-4 py-2.5 border-b border-amber-100">
+                    <span class="font-bold text-amber-700 text-sm">⏰ Por cobrar esta semana (${porCobrar.length})</span>
+                    <p class="text-xs text-amber-600 mt-0.5">Ya les está avisando la app (3, 2 y 1 día antes).</p>
+                </div>
+                <div class="px-4 py-1 max-h-72 overflow-y-auto">
+                    ${porCobrar.length ? porCobrar.map(i => _filaCobro(i, 'porcobrar')).join('') : '<p class="text-sm text-gray-400 py-3">Nadie vence en 7 días</p>'}
+                </div>
+            </div>
+        </div>
+        ${heredados ? `<div class="mb-6 -mt-3 text-xs text-gray-400">ℹ️ ${heredados} salones tienen fechas anteriores al ${_fechaCorta(FECHA_CORTE_COBRO)} (pruebas viejas): el sistema los ignora y no los bloquea hasta que les registres un pago.</div>` : ''}
+    `;
+}
+
 function renderHeader() {
     const stats = calcularEstadisticas(negociosData);
     const totalPorEstado = {
@@ -2266,6 +2394,8 @@ function renderHeader() {
                 <button onclick="filtrarPorEstado('sin_carpeta')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Ver solo estos</button>
             </div>
             ` : ''}
+
+            ${renderSeccionCobros()}
 
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
                 <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>

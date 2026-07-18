@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rservas-admin-v10';
+const CACHE_NAME = 'rservas-admin-v11';
 const urlsToCache = [
   'manifest.json',
   'icons/icon-72x72.png',
