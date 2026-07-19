@@ -503,6 +503,10 @@ const CARPETAS_CLIENTES = [
 let filtroActual = "todos";
 let filtroBusqueda = "";
 let negociosData = [];
+// Estado de configuracion por salon (para "Salones que necesitan ayuda")
+let negociosConServicios = new Set();
+let negociosConHorarios = new Set();
+let serviciosSinProfesionalPorNegocio = {};
 let ordenActual = "reservas"; // 'reservas', 'semana' o 'fecha'
 let reservasDiarias = 0;
 let reservasDiariasData = [];
@@ -625,6 +629,25 @@ async function obtenerReservasDiarias() {
     }
 }
 
+// Trae una tabla completa. Supabase corta en 1000 filas por consulta, asi que
+// se pide por paginas hasta que devuelve menos de una pagina llena.
+async function traerTodo(tabla, columnas, aplicarFiltros) {
+    const PAGINA = 1000;
+    let desde = 0;
+    let todo = [];
+    for (let i = 0; i < 20; i++) {
+        let q = window.supabase.from(tabla).select(columnas).range(desde, desde + PAGINA - 1);
+        if (aplicarFiltros) q = aplicarFiltros(q);
+        const { data, error } = await q;
+        if (error) { console.warn(`Error leyendo ${tabla}:`, error); break; }
+        const filas = data || [];
+        todo = todo.concat(filas);
+        if (filas.length < PAGINA) break;
+        desde += PAGINA;
+    }
+    return { data: todo };
+}
+
 // ==================== CARGAR NEGOCIOS ====================
 async function cargarNegocios() {
     try {
@@ -633,6 +656,18 @@ async function cargarNegocios() {
         const extrasPromise = window.supabase
             .from('negocios')
             .select('id,sitio_web,ntfy_topic');
+
+        // Para "Salones que necesitan ayuda": sin servicios, sin horarios o con
+        // servicios que ningun profesional puede dar => no reciben ni una reserva.
+        //
+        // OJO: Supabase devuelve como maximo 1000 filas por consulta. Hay 2150
+        // servicios y 1290 asignaciones, asi que sin paginar faltaban datos y
+        // salones bien configurados aparecian como rotos. Se pagina siempre.
+        const saludPromise = Promise.all([
+            traerTodo('servicios', 'negocio_id,id', q => q.eq('activo', true)),
+            traerTodo('horarios_profesionales', 'negocio_id,dias'),
+            traerTodo('servicios_profesionales', 'negocio_id,servicio_id')
+        ]);
 
         const { data, error } = await window.supabase
             .from('vista_negocios_admin')
@@ -664,6 +699,32 @@ async function cargarNegocios() {
                 sitio_web: extrasPorId[n.id]?.sitio_web || n.sitio_web || '',
                 ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || ''
             }));
+        }
+
+        try {
+            const [rServicios, rHorarios, rAsignaciones] = await saludPromise;
+            const servicios = rServicios.data || [];
+            const horarios = rHorarios.data || [];
+            const asignaciones = rAsignaciones.data || [];
+
+            negociosConServicios = new Set(servicios.map(s => s.negocio_id));
+            negociosConHorarios = new Set(horarios.filter(h => (h.dias || []).length > 0).map(h => h.negocio_id));
+
+            // Servicios que ningun profesional puede dar: la clienta los ve pero
+            // no puede reservarlos (le paso a HeyStudio con 6 de 7).
+            const asignadosPorNegocio = {};
+            asignaciones.forEach(a => {
+                (asignadosPorNegocio[a.negocio_id] = asignadosPorNegocio[a.negocio_id] || new Set()).add(a.servicio_id);
+            });
+            serviciosSinProfesionalPorNegocio = {};
+            servicios.forEach(s => {
+                const asignados = asignadosPorNegocio[s.negocio_id];
+                if (!asignados || !asignados.has(s.id)) {
+                    serviciosSinProfesionalPorNegocio[s.negocio_id] = (serviciosSinProfesionalPorNegocio[s.negocio_id] || 0) + 1;
+                }
+            });
+        } catch (e) {
+            console.warn('No se pudo calcular el estado de configuracion de los salones:', e);
         }
 
         unique = unique.map(aplicarRectificacionNegocio);
@@ -2088,8 +2149,6 @@ function actualizarListaNegocios() {
         resultados = resultados.filter(n => pendientesLocal.includes(n.id));
     } else if (filtroActual === 'eliminados') {
         resultados = resultados.filter(n => eliminadosLocal.includes(n.id));
-    } else if (filtroActual === 'sin_carpeta') {
-        resultados = resultados.filter(n => !buscarCarpetaCliente(n));
     } else if (filtroActual !== 'todos') {
         resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
     }
@@ -2109,7 +2168,7 @@ function actualizarListaNegocios() {
 }
 
 function actualizarBotonesFiltro() {
-    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados', 'sin_carpeta'];
+    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados'];
     estados.forEach(estado => {
         const btn = document.getElementById(`filtro-${estado}`);
         if (btn) {
@@ -2124,7 +2183,6 @@ function actualizarBotonesFiltro() {
                 else if (estado === 'pendiente') btn.classList.add('bg-purple-600', 'text-white');
                 else if (estado === 'inactiva') btn.classList.add('bg-gray-600', 'text-white');
                 else if (estado === 'eliminados') btn.classList.add('bg-pink-600', 'text-white');
-                else if (estado === 'sin_carpeta') btn.classList.add('bg-amber-600', 'text-white');
             } else {
                 if (estado === 'todos') btn.classList.add('bg-gray-200', 'text-gray-700');
                 else if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
@@ -2133,7 +2191,6 @@ function actualizarBotonesFiltro() {
                 else if (estado === 'pendiente') btn.classList.add('bg-purple-100', 'text-purple-700');
                 else if (estado === 'inactiva') btn.classList.add('bg-gray-100', 'text-gray-700');
                 else if (estado === 'eliminados') btn.classList.add('bg-pink-100', 'text-pink-700');
-                else if (estado === 'sin_carpeta') btn.classList.add('bg-amber-100', 'text-amber-700');
             }
         }
     });
@@ -2263,6 +2320,93 @@ function renderSeccionCobros() {
     `;
 }
 
+// ==================== SALONES QUE NECESITAN AYUDA ====================
+// Un salon sin servicios, sin horarios o sin profesional asignado a sus
+// servicios NO puede recibir ni una reserva, y la duena no siempre se da
+// cuenta: cree que la app no sirve y la abandona.
+function diagnosticarNegocio(n) {
+    const problemas = [];
+    if (!Number(n.profesionales_activas)) problemas.push('sin profesional');
+    if (!negociosConServicios.has(n.id)) problemas.push('sin servicios');
+    if (!negociosConHorarios.has(n.id)) problemas.push('sin horarios');
+    const sueltos = serviciosSinProfesionalPorNegocio[n.id] || 0;
+    if (sueltos > 0) problemas.push(`${sueltos} servicio${sueltos > 1 ? 's' : ''} sin profesional`);
+    return problemas;
+}
+
+function calcularSalud(negocios) {
+    const criticos = [];
+    let totalConProblemas = 0;
+
+    (negocios || []).forEach(n => {
+        if (eliminadosLocal.includes(n.id)) return;
+        if (n.estado_suscripcion === 'inactiva') return;
+        const problemas = diagnosticarNegocio(n);
+        if (!problemas.length) return;
+        totalConProblemas++;
+
+        // Accionables: los que pagan, o entraron hace poco y siguen a tiempo de
+        // arrancar bien. El resto solo suma ruido a la lista.
+        const dias = Number(n.dias_activo) || 0;
+        const esAccionable = n.estado_suscripcion === 'activa' || dias <= 30;
+        if (esAccionable) criticos.push({ n, problemas, dias });
+    });
+
+    criticos.sort((a, b) => {
+        if ((a.n.estado_suscripcion === 'activa') !== (b.n.estado_suscripcion === 'activa')) {
+            return a.n.estado_suscripcion === 'activa' ? -1 : 1;
+        }
+        return a.dias - b.dias;
+    });
+
+    return { criticos, totalConProblemas };
+}
+
+function renderSeccionSalud() {
+    const { criticos, totalConProblemas } = calcularSalud(negociosData);
+    if (!totalConProblemas) return '';
+
+    const filas = criticos.slice(0, 12).map(({ n, problemas, dias }) => {
+        const tel = (n.telefono || '').replace(/\D/g, '');
+        const btnWhats = tel
+            ? `<a href="https://wa.me/53${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">WhatsApp</a>`
+            : '';
+        const etiquetaPlan = n.estado_suscripcion === 'activa'
+            ? '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">PAGA</span>'
+            : `<span class="text-xs text-gray-400">${dias}d</span>`;
+        return `
+            <div class="flex items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-gray-800 text-sm truncate">${escapeHtml(n.nombre || '(sin nombre)')}</span>
+                        ${etiquetaPlan}
+                    </div>
+                    <div class="text-xs text-red-600">${problemas.map(escapeHtml).join(' · ')}</div>
+                </div>
+                ${btnWhats}
+            </div>
+        `;
+    }).join('');
+
+    const ocultos = criticos.length > 12 ? criticos.length - 12 : 0;
+
+    return `
+        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden">
+            <div class="bg-orange-50 px-4 py-2.5 border-b border-orange-100 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <span class="font-bold text-orange-700 text-sm">🚧 Salones que necesitan ayuda (${criticos.length})</span>
+                    <p class="text-xs text-orange-600 mt-0.5">No pueden recibir reservas hasta resolverlo. Se listan los que pagan y los que entraron hace menos de 30 días.</p>
+                </div>
+                <span class="text-xs text-gray-500">${totalConProblemas} con algo pendiente en total</span>
+            </div>
+            <div class="px-4 py-1 max-h-80 overflow-y-auto">
+                ${filas || '<p class="text-sm text-gray-400 py-3">Ninguno urgente 🎉</p>'}
+            </div>
+            ${ocultos ? `<div class="px-4 py-2 text-xs text-gray-400 border-t">y ${ocultos} más…</div>` : ''}
+        </div>
+    `;
+}
+
 function renderHeader() {
     const stats = calcularEstadisticas(negociosData);
     const totalPorEstado = {
@@ -2272,8 +2416,7 @@ function renderHeader() {
         trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length,
         pendiente: negociosData.filter(n => pendientesLocal.includes(n.id)).length,
         inactiva: negociosData.filter(n => n.estado_suscripcion === 'inactiva').length,
-        eliminados: negociosData.filter(n => eliminadosLocal.includes(n.id)).length,
-        sin_carpeta: getNegociosSinCarpeta().length
+        eliminados: negociosData.filter(n => eliminadosLocal.includes(n.id)).length
     };
     
     // Obtener la fecha actual formateada
@@ -2292,11 +2435,8 @@ function renderHeader() {
                     <p class="text-gray-600 text-sm">Gestión de negocios Rservas</p>
                 </div>
                 <div class="flex gap-2 flex-wrap">
-                    <button onclick="filtrarPorEstado('sin_carpeta')" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">Revisar sin carpeta (${totalPorEstado.sin_carpeta})</button>
-                    <button onclick="window.configurarTokenGitHub()" class="${tieneTokenGitHub() ? 'bg-sky-600 hover:bg-sky-700' : 'bg-amber-500 hover:bg-amber-600'} text-white px-4 py-2 rounded-lg text-sm transition font-bold" title="Token necesario para actualizar en nube">${tieneTokenGitHub() ? '☁️ GitHub OK' : '⚠️ Token GitHub'}</button>
                     <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">📥 Exportar CSV</button>
-                    <button onclick="window.abrirGestionCarpetas()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition font-bold">📁 Carpetas locales</button>
-                    <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Actualizar</button>
+                    <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Recargar</button>
                     <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">🚪 Cerrar Sesión</button>
                 </div>
             </div>
@@ -2385,17 +2525,9 @@ function renderHeader() {
                 <span class="text-xs text-gray-500">💰 ${PRECIO_MENSUAL} CUP/mes | ⏱️ +${DIAS_POR_DEFECTO} días</span>
             </div>
             
-            ${totalPorEstado.sin_carpeta > 0 ? `
-            <div class="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
-                    <p class="font-bold text-amber-800">Negocios sin carpeta local detectada: ${totalPorEstado.sin_carpeta}</p>
-                    <p class="text-sm text-amber-700">Estos negocios no tienen match automatico con ${escapeHtml(CLIENTES_ROOT_LOCAL)}. Revisalos antes de actualizar.</p>
-                </div>
-                <button onclick="filtrarPorEstado('sin_carpeta')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Ver solo estos</button>
-            </div>
-            ` : ''}
-
             ${renderSeccionCobros()}
+
+            ${renderSeccionSalud()}
 
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
                 <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
@@ -2405,7 +2537,6 @@ function renderHeader() {
                 <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
                 <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
                 <button id="filtro-eliminados" onclick="filtrarPorEstado('eliminados')" class="px-3 py-1.5 rounded-lg text-sm bg-pink-100 text-pink-700">🗑️ Eliminados (${totalPorEstado.eliminados})</button>
-                <button id="filtro-sin_carpeta" onclick="filtrarPorEstado('sin_carpeta')" class="px-3 py-1.5 rounded-lg text-sm bg-amber-100 text-amber-700">Sin carpeta (${totalPorEstado.sin_carpeta})</button>
             </div>
         </div>
     `;
@@ -2424,37 +2555,6 @@ function renderListaNegocios(negocios) {
         html += `<div class="mb-3 text-sm text-gray-500">🔍 Resultados para: "${filtroBusqueda}" (${negocios.length} encontrados)</div>`;
     }
     
-    html += `
-        <div id="barra-actualizacion-masiva" class="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-4">
-            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                <div>
-                    <p class="font-bold text-gray-900">Actualizacion masiva</p>
-                    <p id="contador-seleccion-actualizacion" class="text-sm text-gray-600">0 seleccionados | 0 con carpeta</p>
-                    <p class="text-xs text-gray-500 mt-1">Guarda grupos fijos como Lote 1, Lote 2 y reutilizalos cuando quieras.</p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <button onclick="window.seleccionarNegociosVisiblesActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Seleccionar visibles</button>
-                    <button onclick="window.limpiarSeleccionActualizacion()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium">Limpiar</button>
-                    <button onclick="window.guardarSeleccionComoLote()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Guardar lote</button>
-                    <button onclick="window.guardarSeleccionEnLotesDeDiez()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-4 py-2 rounded-lg text-sm font-bold">Guardar lotes de 10</button>
-                    <button onclick="window.actualizarSeleccionadosEnNube(false)" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-bold">☁️ Actualizar en nube</button>
-                    <button onclick="window.actualizarSeleccionadosEnNube(true)" class="bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-2 rounded-lg text-sm font-bold">☁️ Nube + APK</button>
-                    <button onclick="window.prepararActualizacionSeleccionada(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">CMD app</button>
-                    <button onclick="window.prepararActualizacionSeleccionada(true)" class="bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold">CMD + APK</button>
-                </div>
-            </div>
-            <div class="border-t pt-3">
-                <div class="flex items-center justify-between gap-2 mb-2">
-                    <p class="font-semibold text-gray-800">Lotes guardados</p>
-                    <p id="lotes-actualizacion-resumen" class="text-xs text-gray-500">0 lote(s) guardado(s)</p>
-                </div>
-                <div id="lotes-actualizacion-lista" class="grid gap-2">
-                    <p class="text-sm text-gray-500">No hay lotes guardados todavia.</p>
-                </div>
-            </div>
-        </div>
-    `;
-
     html += `<div class="grid gap-4">`;
     
     if (negocios.length === 0) {
@@ -2476,9 +2576,6 @@ function renderListaNegocios(negocios) {
         const ultimoHola = getUltimaVezTexto(n.id, 'hola');
         const urlNegocio = normalizarUrlNegocio(n);
         const urlLabel = urlNegocio ? escapeHtml(getUrlLabel(urlNegocio)) : '';
-        const carpetaCliente = buscarCarpetaCliente(n);
-        const candidatosCarpeta = carpetaCliente ? [] : obtenerCandidatosCarpetaNegocio(n).slice(0, 4);
-        const seleccionadoActualizacion = seleccionActualizacion.has(String(n.id));
         
         const estadoConfig = {
             'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
@@ -2510,15 +2607,6 @@ function renderListaNegocios(negocios) {
                 <div class="flex flex-col md:flex-row justify-between items-start gap-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2 flex-wrap">
-                            <label class="inline-flex items-center gap-2 px-2 py-1 rounded-lg border ${carpetaCliente ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-gray-200 bg-gray-50 text-gray-400'} text-xs font-bold">
-                                <input type="checkbox"
-                                       class="check-actualizacion-negocio w-4 h-4"
-                                       value="${escapeHtml(String(n.id))}"
-                                       onchange="window.toggleSeleccionActualizacion('${String(n.id).replace(/'/g, "\\'")}', this.checked)"
-                                       ${seleccionadoActualizacion ? 'checked' : ''}
-                                       ${carpetaCliente ? '' : 'disabled'}>
-                                Actualizar
-                            </label>
                             <h2 class="font-bold text-lg">${medallaTop}🏢 ${nombreMostrado}</h2>
                             ${ordenActual === 'reservas' ? `<span class="px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700 font-bold">Lugar #${posicionRanking}</span>` : ''}
                             <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
@@ -2528,9 +2616,6 @@ function renderListaNegocios(negocios) {
                         <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
                         ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">Abrir negocio (${urlLabel})</a></p>` : ''}
-                        <p class="text-sm ${carpetaCliente ? 'text-emerald-700' : 'text-amber-700'}">Carpeta: ${carpetaCliente ? escapeHtml(carpetaCliente) : 'sin match automatico'}</p>
-                        ${!carpetaCliente ? `<p class="text-xs text-amber-700 mt-1">Candidatos: ${candidatosCarpeta.length ? candidatosCarpeta.map(escapeHtml).join(' / ') : 'sin datos para sugerir'}</p>` : ''}
-                        <div id="version-app-${n.id}" class="mt-2">${getVersionBadgeHtml(carpetaCliente ? 'cargando' : 'sin_carpeta')}</div>
                     </div>
                 </div>
                 
@@ -2578,15 +2663,6 @@ function renderListaNegocios(negocios) {
                     
                     <button onclick="window.abrirModalPagadoHasta('${n.id}', '${n.nombre.replace(/'/g, "\\'")}', '${n.proximo_pago || ''}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Pagado hasta</button>
 
-                    <button id="btn-nube-${n.id}" onclick="window.actualizarClienteEnNube(${JSON.stringify(n).replace(/"/g, '&quot;')}, false)" class="bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition flex-1 md:flex-none text-center" ${carpetaCliente ? '' : 'disabled title="Sin carpeta detectada"'}>☁️ Actualizar</button>
-                    <button id="btn-nube-apk-${n.id}" onclick="window.actualizarClienteEnNube(${JSON.stringify(n).replace(/"/g, '&quot;')}, true)" class="bg-cyan-700 hover:bg-cyan-800 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition flex-1 md:flex-none text-center" ${carpetaCliente ? '' : 'disabled title="Sin carpeta detectada"'}>☁️ + APK</button>
-
-                    <button onclick="window.prepararActualizacionNegocio(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">CMD app</button>
-
-                    <button onclick="window.prepararActualizacionNegocioConApk(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">CMD + APK</button>
-
-                    <button onclick="window.editarCarpetaRapida('${n.id}', '${(n.nombre||'').replace(/'/g,"\\'")}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center" title="Carpeta: ${escapeHtml(carpetaCliente || 'Sin carpeta')}">📁 ${carpetaCliente ? escapeHtml(carpetaCliente) : 'Sin carpeta'}</button>
-                    
                     <div class="flex flex-col gap-1">
                         <button onclick="window.enviarWhatsApp('${n.telefono || ''}', '${n.nombre.replace(/'/g, "\\'")}', '${n.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
                         ${ultimoSoporte ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoSoporte}</span>` : ''}
