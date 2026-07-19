@@ -3185,7 +3185,7 @@ function limpiarCarpetaNegocio(negocioId) {
     if (!confirm('¿Eliminar la carpeta guardada para este cliente? Volverá a usar la detección automática.')) return;
     setCarpetaGuardada(negocioId, '');
     renderGestionCarpetas();
-}nosManana;
+}
 window.configurarTokenGitHub = configurarTokenGitHub;
 window.actualizarClienteEnNube = actualizarClienteEnNube;
 window.actualizarSeleccionadosEnNube = actualizarSeleccionadosEnNube;
