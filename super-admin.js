@@ -2604,7 +2604,9 @@ function renderHeader() {
                     </div>
                 </div>
             </div>
-            
+
+            ${renderSeccionRomaHub()}
+
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
                 <div class="bg-white p-3 rounded-lg shadow text-center">
                     <div class="text-2xl font-bold text-gray-800">${stats.total}</div>
@@ -2668,8 +2670,6 @@ function renderHeader() {
             ${renderSeccionCobros()}
 
             ${renderSeccionSalud()}
-
-            ${renderSeccionRomaHub()}
 
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
                 <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
