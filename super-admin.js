@@ -510,6 +510,7 @@ let serviciosSinProfesionalPorNegocio = {};
 let ordenActual = "reservas"; // 'reservas', 'semana' o 'fecha'
 let reservasDiarias = 0;
 let reservasDiariasData = [];
+let reportesTiendaData = [];
 let reservasSemanaData = [];
 let ultimaCitaPorNegocio = {};
 let actividadReservasCargada = false;
@@ -655,7 +656,7 @@ async function cargarNegocios() {
         
         const extrasPromise = window.supabase
             .from('negocios')
-            .select('id,sitio_web,ntfy_topic');
+            .select('id,sitio_web,ntfy_topic,es_tienda_externa');
 
         // Para "Salones que necesitan ayuda": sin servicios, sin horarios o con
         // servicios que ningun profesional puede dar => no reciben ni una reserva.
@@ -697,7 +698,8 @@ async function cargarNegocios() {
             unique = unique.map(n => ({
                 ...n,
                 sitio_web: extrasPorId[n.id]?.sitio_web || n.sitio_web || '',
-                ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || ''
+                ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || '',
+                es_tienda_externa: extrasPorId[n.id]?.es_tienda_externa === true
             }));
         }
 
@@ -2407,6 +2409,144 @@ function renderSeccionSalud() {
     `;
 }
 
+// ==================== MODERACIÓN ROMAHUB (tiendas externas + reportes) ====================
+// Las tiendas externas (es_tienda_externa=true) son vendedores sin cuenta
+// rservasroma que se auto-registraron gratis en RomaHub (crear-tienda.html).
+// Sin control previo, asi que este panel es la barrera de moderacion:
+// ocultarlas (configurado=false) o revisar lo que la gente reporto.
+async function cargarReportesTienda() {
+    try {
+        const { data, error } = await window.supabase
+            .from('reportes_tienda')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.warn('No se pudo cargar reportes_tienda (¿corriste el SQL de F5?):', error.message);
+            return [];
+        }
+        return data || [];
+    } catch (error) {
+        console.warn('Error cargando reportes de tienda:', error);
+        return [];
+    }
+}
+
+async function ocultarTiendaExterna(id, nombre) {
+    if (!confirm(`🚫 ¿Ocultar la tienda "${nombre}" de RomaHub?\n\nDeja de verse en el directorio y el escaparate hasta que la reactives.`)) return;
+    try {
+        const { error } = await window.supabase.from('negocios').update({ configurado: false }).eq('id', id);
+        if (error) throw error;
+        alert('✅ Tienda ocultada.');
+        location.reload();
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+async function activarTiendaExterna(id, nombre) {
+    try {
+        const { error } = await window.supabase.from('negocios').update({ configurado: true }).eq('id', id);
+        if (error) throw error;
+        alert(`✅ "${nombre}" vuelve a verse en RomaHub.`);
+        location.reload();
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+async function resolverReporteTienda(id, estado) {
+    try {
+        const { error } = await window.supabase.from('reportes_tienda').update({ estado }).eq('id', id);
+        if (error) throw error;
+        reportesTiendaData = reportesTiendaData.map(r => r.id === id ? { ...r, estado } : r);
+        renderHeader();
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+function renderSeccionRomaHub() {
+    const tiendasExternas = negociosData.filter(n => n.es_tienda_externa === true);
+    const pendientes = reportesTiendaData.filter(r => r.estado === 'pendiente');
+    if (!tiendasExternas.length && !pendientes.length) return '';
+
+    const negocioPorId = Object.fromEntries(negociosData.map(n => [n.id, n]));
+    const reportesPorNegocio = {};
+    reportesTiendaData.forEach(r => {
+        reportesPorNegocio[r.negocio_id] = (reportesPorNegocio[r.negocio_id] || 0) + (r.estado === 'pendiente' ? 1 : 0);
+    });
+
+    const filasTiendas = tiendasExternas.slice(0, 30).map(n => {
+        const numReportes = reportesPorNegocio[n.id] || 0;
+        const oculta = n.configurado === false;
+        const badgeReportes = numReportes > 0
+            ? `<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">🚩 ${numReportes}</span>`
+            : '';
+        const badgeEstado = oculta
+            ? '<span class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-bold">Oculta</span>'
+            : '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">Visible</span>';
+        const btnToggle = oculta
+            ? `<button onclick="activarTiendaExterna('${n.id}', '${escapeHtml(n.nombre).replace(/'/g, "\\'")}')" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">Reactivar</button>`
+            : `<button onclick="ocultarTiendaExterna('${n.id}', '${escapeHtml(n.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">Ocultar</button>`;
+        return `
+            <div class="flex items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-medium text-gray-800 text-sm truncate">${escapeHtml(n.nombre || '(sin nombre)')}</span>
+                        ${badgeEstado}
+                        ${badgeReportes}
+                    </div>
+                    <div class="text-xs text-gray-400">${escapeHtml(n.provincia || 'sin provincia')}${n.municipio ? ' · ' + escapeHtml(n.municipio) : ''}</div>
+                </div>
+                ${btnToggle}
+            </div>
+        `;
+    }).join('');
+
+    const filasReportes = pendientes.slice(0, 20).map(r => {
+        const negocio = negocioPorId[r.negocio_id];
+        const nombreNegocio = negocio ? negocio.nombre : '(negocio eliminado)';
+        return `
+            <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-medium text-gray-800 text-sm">${escapeHtml(nombreNegocio)}</span>
+                        <span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">${escapeHtml(r.motivo)}</span>
+                    </div>
+                    ${r.detalle ? `<div class="text-xs text-gray-500 mt-0.5">${escapeHtml(r.detalle)}</div>` : ''}
+                    <div class="text-xs text-gray-400 mt-0.5">${new Date(r.created_at).toLocaleString('es-ES')}</div>
+                </div>
+                <div class="flex gap-1.5 shrink-0">
+                    ${negocio && negocio.es_tienda_externa ? `<button onclick="ocultarTiendaExterna('${negocio.id}', '${escapeHtml(negocio.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-medium">Ocultar</button>` : ''}
+                    <button onclick="resolverReporteTienda('${r.id}', 'descartado')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1 rounded text-xs font-medium">Descartar</button>
+                    <button onclick="resolverReporteTienda('${r.id}', 'resuelto')" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium">Resuelto</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden">
+            <div class="bg-pink-50 px-4 py-2.5 border-b border-pink-100 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <span class="font-bold text-pink-700 text-sm">🛍️ RomaHub — tiendas externas (${tiendasExternas.length})</span>
+                    <p class="text-xs text-pink-600 mt-0.5">Vendedores sin cuenta rservasroma, auto-registrados gratis. ${pendientes.length} reporte(s) sin revisar.</p>
+                </div>
+            </div>
+            ${filasReportes ? `
+                <div class="px-4 py-2 bg-orange-50/50 border-b border-orange-100">
+                    <p class="text-xs font-bold text-orange-700 mb-1">🚩 Reportes pendientes</p>
+                    <div class="max-h-64 overflow-y-auto">${filasReportes}</div>
+                </div>
+            ` : ''}
+            <div class="px-4 py-1 max-h-72 overflow-y-auto">
+                ${filasTiendas || '<p class="text-sm text-gray-400 py-3">Ninguna tienda externa todavía.</p>'}
+            </div>
+            ${tiendasExternas.length > 30 ? `<div class="px-4 py-2 text-xs text-gray-400 border-t">y ${tiendasExternas.length - 30} más…</div>` : ''}
+        </div>
+    `;
+}
+
 function renderHeader() {
     const stats = calcularEstadisticas(negociosData);
     const totalPorEstado = {
@@ -2528,6 +2668,8 @@ function renderHeader() {
             ${renderSeccionCobros()}
 
             ${renderSeccionSalud()}
+
+            ${renderSeccionRomaHub()}
 
             <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
                 <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
@@ -3325,6 +3467,13 @@ async function init() {
         console.log('✅ Actividad de reservas cargada en segundo plano');
     }).catch(error => {
         console.error('Error cargando actividad en segundo plano:', error);
+    });
+
+    // Reportes de RomaHub (tiendas externas): en segundo plano, no bloquea
+    // el panel si la tabla aun no existe (F5 recien desplegado).
+    cargarReportesTienda().then(reportes => {
+        reportesTiendaData = reportes;
+        renderHeader();
     });
 }
 
