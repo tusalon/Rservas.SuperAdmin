@@ -1531,7 +1531,9 @@ function calcularFechaMasDias(dias) {
 function ordenarNegocios(negocios, orden) {
     const negociosOrdenados = [...negocios];
     
-    if (orden === 'reservas') {
+    if (orden === 'comercial' && window.ordenarPorPrioridadComercial) {
+        return window.ordenarPorPrioridadComercial(negociosOrdenados);
+    } else if (orden === 'reservas') {
         negociosOrdenados.sort((a, b) => {
             const reservasA = Number(a.reservas_mes) || 0;
             const reservasB = Number(b.reservas_mes) || 0;
@@ -1573,7 +1575,7 @@ function cambiarOrden(orden) {
 }
 
 function actualizarBotonOrden() {
-    ['reservas', 'semana', 'fecha'].forEach(orden => {
+    ['comercial', 'reservas', 'semana', 'fecha'].forEach(orden => {
         const btn = document.getElementById(`order-${orden}`);
         if (!btn) return;
 
@@ -2090,22 +2092,23 @@ async function exportarCSV() {
             n.telefono?.toLowerCase().includes(filtroBusqueda)
         );
     }
+    if (window.aplicarFiltroComercial) {
+        resultados = window.aplicarFiltroComercial(resultados);
+    }
     
-    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Estado', 'Reservas Mes', 'Profesionales', 'Días Activo', 'Próximo Pago', 'Monto', 'Días para Renovar', 'Reservas Hoy'];
-    const rows = resultados.map(n => [
-        n.id, 
-        n.nombre || '', 
-        n.email || '', 
-        n.telefono || '',
-        n.estado_suscripcion || '', 
-        n.reservas_mes || 0, 
-        n.profesionales_activas || 0,
-        n.dias_activo || 0, 
-        n.proximo_pago || '', 
-        n.monto_ultimo_pago || PRECIO_MENSUAL,
-        n.dias_para_renovar || 0,
-        getReservasDiariasPorNegocio(n.id)
-    ]);
+    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Estado suscripción', 'Segmento', 'Prioridad', 'Diagnóstico', 'Acción recomendada', 'Estado comercial', 'Última actividad', 'Última cita', 'Próxima cita', 'Reservas históricas', 'Reservas Mes', 'Profesionales', 'Próximo Pago', 'Monto', 'Próximo seguimiento', 'Responsable', 'Objeción', 'Notas'];
+    const rows = resultados.map(n => {
+        const audit = window.obtenerAuditoriaComercial?.(n.id) || {};
+        const tracking = window.obtenerSeguimientoComercial?.(n.id) || {};
+        return [
+            n.id, n.nombre || '', n.email || '', n.telefono || '', n.estado_suscripcion || '',
+            audit.segment || '', tracking.prioridad_manual || audit.priority || '', audit.diagnosis || '', audit.action || '',
+            tracking.estado || 'sin_contactar', audit.lastActivity || '', audit.lastPastAppointment || '', audit.nextAppointment || '',
+            audit.total || 0, n.reservas_mes || 0, audit.professionalCount ?? n.profesionales_activas ?? 0,
+            n.proximo_pago || '', n.monto_ultimo_pago || PRECIO_MENSUAL, tracking.proximo_seguimiento || '',
+            tracking.responsable || '', tracking.objecion || '', tracking.notas || ''
+        ];
+    });
     
     const csvContent = [headers, ...rows].map(row => 
         row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
@@ -2138,6 +2141,7 @@ function limpiarBusqueda() {
 }
 
 function filtrarPorEstado(estado) {
+    window.limpiarFiltroComercial?.(false);
     filtroActual = estado;
     actualizarListaNegocios();
     actualizarBotonesFiltro();
@@ -2161,6 +2165,9 @@ function actualizarListaNegocios() {
             (n.nombre && n.nombre.toLowerCase().includes(filtroBusqueda)) ||
             (n.telefono && n.telefono.toLowerCase().includes(filtroBusqueda))
         );
+    }
+    if (window.aplicarFiltroComercial) {
+        resultados = window.aplicarFiltroComercial(resultados);
     }
     
     // Aplicar ordenamiento
@@ -2607,6 +2614,8 @@ function renderHeader() {
 
             ${renderSeccionRomaHub()}
 
+            ${window.renderEmbudoComercial ? window.renderEmbudoComercial() : ''}
+
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
                 <div class="bg-white p-3 rounded-lg shadow text-center">
                     <div class="text-2xl font-bold text-gray-800">${stats.total}</div>
@@ -2653,6 +2662,7 @@ function renderHeader() {
             
             <div class="mb-4 flex flex-wrap gap-3 items-center">
                 <span class="text-sm text-gray-500 font-medium">Ordenar por:</span>
+                <button id="order-comercial" onclick="cambiarOrden('comercial')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">🎯 Prioridad comercial</button>
                 <button id="order-semana" onclick="cambiarOrden('semana')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">Ultima semana</button>
                 <button id="order-reservas" onclick="cambiarOrden('reservas')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-purple-600 text-white">🏆 Más reservas</button>
                 <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">📅 Más recientes</button>
@@ -2794,6 +2804,8 @@ function renderListaNegocios(negocios) {
                     <div>💳 Último pago: ${fechaUltimo}</div>
                     <div class="${diasRestantes <= 3 && n.estado_suscripcion === 'activa' ? 'text-red-600 font-bold' : ''}">⏰ Próximo pago: ${fechaProximo} ${diasRestantes > 0 ? `(faltan ${diasRestantes} días)` : diasRestantes < 0 ? '(VENCIDO)' : ''}</div>
                 </div>
+
+                ${window.renderFichaComercial ? window.renderFichaComercial(n) : ''}
 
                 <div class="mt-3 flex flex-wrap gap-2">
                     <button onclick="window.togglePendiente('${n.id}')" class="${esPendiente ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
@@ -3457,7 +3469,9 @@ async function init() {
 
     Promise.all([
         obtenerReservasDiarias(),
-        obtenerActividadReservas(negocios.map(n => n.id).filter(Boolean))
+        obtenerActividadReservas(negocios.map(n => n.id).filter(Boolean)),
+        window.cargarAuditoriaComercial ? window.cargarAuditoriaComercial(negocios) : Promise.resolve(),
+        window.cargarSeguimientoComercial ? window.cargarSeguimientoComercial() : Promise.resolve()
     ]).then(([totalDiarias]) => {
         reservasDiarias = totalDiarias || 0;
         renderHeader();

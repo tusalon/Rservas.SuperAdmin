@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rservas-admin-v13';
+const CACHE_NAME = 'rservas-admin-v14';
 const urlsToCache = [
   'manifest.json',
   'icons/icon-72x72.png',
@@ -59,6 +59,7 @@ self.addEventListener('fetch', event => {
     requestUrl.pathname.endsWith('/index.html') ||
     requestUrl.pathname.endsWith('/login.html') ||
     requestUrl.pathname.endsWith('/super-admin.js') ||
+    requestUrl.pathname.endsWith('/commercial-tracking.js') ||
     requestUrl.pathname.endsWith('/supabase-config.js')
   ) {
     event.respondWith(fetch(event.request));
