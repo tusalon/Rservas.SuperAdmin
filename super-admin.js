@@ -1722,6 +1722,14 @@ async function borrarRegistrosPorNegocio({ table, column, label }, negocioId) {
     }
 }
 
+async function borrarDatosRelacionadosNegocio(id) {
+    const resultados = [];
+    for (const tabla of TABLAS_BORRADO_NEGOCIO) {
+        resultados.push(await borrarRegistrosPorNegocio(tabla, id));
+    }
+    return resultados;
+}
+
 function limpiarEstadoLocalNegocio(id) {
     pendientesLocal = pendientesLocal.filter(negocioId => negocioId !== id);
     eliminadosLocal = eliminadosLocal.filter(negocioId => negocioId !== id);
@@ -1745,10 +1753,7 @@ async function borrarNegocioCompleto(id, nombreNegocio) {
     }
 
     try {
-        const resultados = [];
-        for (const tabla of TABLAS_BORRADO_NEGOCIO) {
-            resultados.push(await borrarRegistrosPorNegocio(tabla, id));
-        }
+        const resultados = await borrarDatosRelacionadosNegocio(id);
 
         const errores = resultados.filter(resultado => resultado.status === 'error');
         if (errores.length > 0) {
@@ -1785,6 +1790,64 @@ async function borrarNegocioCompleto(id, nombreNegocio) {
             .join('\n') || 'No habia registros relacionados.';
 
         alert(`Negocio borrado de Supabase.\n\n${resumen}`);
+        location.reload();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function reiniciarNegocioCompleto(id, nombreNegocio) {
+    const nombre = nombreNegocio || 'este negocio';
+    const primeraConfirmacion = confirm(
+        `REINICIAR ${nombre} desde cero?\n\n` +
+        'Esto borra reservas, clientes, profesionales, servicios, horarios, configuracion, suscripcion y datos de RomaFinanzas.\n\n' +
+        'La cuenta y el login del negocio se mantienen: al entrar de nuevo vera el asistente de configuracion inicial.\n\n' +
+        'Esta accion no se puede deshacer.'
+    );
+    if (!primeraConfirmacion) return;
+
+    const codigo = prompt(`Para confirmar el reinicio de ${nombre}, escribe REINICIAR:`);
+    if (codigo !== 'REINICIAR') {
+        alert('Reinicio cancelado. No se escribio REINICIAR.');
+        return;
+    }
+
+    try {
+        const resultados = await borrarDatosRelacionadosNegocio(id);
+
+        const errores = resultados.filter(resultado => resultado.status === 'error');
+        if (errores.length > 0) {
+            const detalleErrores = errores
+                .slice(0, 10)
+                .map(resultado => `${resultado.label}: ${resultado.detail}`)
+                .join('\n');
+            alert(
+                'No se completo el reinicio.\n\n' +
+                'Supabase bloqueo una o mas tablas.\n\n' +
+                detalleErrores
+            );
+            return;
+        }
+
+        const { error: errorConfigurado } = await window.supabase
+            .from('negocios')
+            .update({ configurado: false })
+            .eq('id', id);
+
+        if (errorConfigurado) {
+            alert(
+                'Se borraron los datos, pero no se pudo marcar el negocio como no configurado.\n\n' +
+                errorConfigurado.message
+            );
+            return;
+        }
+
+        const resumen = resultados
+            .filter(resultado => resultado.status === 'ok' && resultado.count > 0)
+            .map(resultado => `${resultado.label}: ${resultado.count}`)
+            .join('\n') || 'No habia registros relacionados.';
+
+        alert(`Negocio reiniciado.\n\nAl volver a entrar vera el asistente de configuracion inicial.\n\n${resumen}`);
         location.reload();
     } catch (error) {
         alert('Error: ' + error.message);
@@ -2834,7 +2897,9 @@ function renderListaNegocios(negocios) {
                     <button onclick="window.notificarVencimiento(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⚠️ Avisar Vencimiento</button>
                     
                     <button onclick="window.borrarNegocioCompleto('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Borrar Supabase</button>
-                    
+
+                    <button onclick="window.reiniciarNegocioCompleto('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Reiniciar cuenta</button>
+
                     <button onclick="window.toggleEliminado('${n.id}')" class="${esEliminado ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-100 text-pink-700 hover:bg-pink-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
                         ${esEliminado ? '👁️ Mostrar en Principal' : '🙈 Ocultar de Vista'}
                     </button>
@@ -3236,6 +3301,7 @@ window.suspenderNegocio = suspenderNegocio;
 window.reactivarNegocio = reactivarNegocio;
 window.inactivarNegocio = inactivarNegocio;
 window.borrarNegocioCompleto = borrarNegocioCompleto;
+window.reiniciarNegocioCompleto = reiniciarNegocioCompleto;
 window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
 window.generarMensajeCliente = generarMensajeCliente;
