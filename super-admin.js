@@ -1918,20 +1918,61 @@ async function guardarPagadoHasta(id) {
     }
 }
 
+// Largo del numero LOCAL por codigo de pais. Sin este dato no se puede saber
+// si un numero que empieza por 53 es un movil cubano local (53XXXXXX, 8
+// digitos) o uno ya internacional (53 + 8 digitos): esa ambiguedad era la que
+// armaba numeros invalidos. Mismos valores que utils/phone-utils.js en el repo
+// de rservasroma; si se agrega un pais alla, agregarlo aqui tambien.
+const LARGO_LOCAL_POR_PAIS = {
+    '1': 10, '7': 10, '33': 9, '34': 9, '39': 10, '49': 11, '51': 9, '52': 10,
+    '53': 8, '54': 11, '56': 9, '57': 10, '58': 10, '84': 9, '86': 11,
+    '351': 9, '592': 7, '593': 9
+};
+
+// Convierte el telefono guardado del negocio en el numero internacional que
+// espera wa.me. Antes cada sitio de llamada hacia su propia cuenta ("si no
+// empieza por 53 y tiene 8 digitos, ponle 53"), lo que rompia tres casos
+// reales: moviles cubanos que empiezan por 53, numeros ya internacionales a
+// los que se les pegaba otro 53 delante, y cualquier pais que no fuera Cuba.
+function normalizarTelefonoWhatsApp(telefono, codigoPais) {
+    const digitos = String(telefono || '').replace(/\D/g, '');
+    if (!digitos) return '';
+
+    const cc = String(codigoPais || '').replace(/\D/g, '') || '53';
+    const largoLocal = LARGO_LOCAL_POR_PAIS[cc] || 8;
+
+    // Ya trae su propio codigo de pais delante.
+    if (digitos.startsWith(cc) && digitos.length > largoLocal) return digitos;
+
+    // Guardado con el codigo de OTRO pais (numero extranjero o negocio cuyo
+    // codigo_pais no esta configurado): respetarlo en vez de pegarle un 53.
+    const otroPais = Object.keys(LARGO_LOCAL_POR_PAIS)
+        .sort((a, b) => b.length - a.length)
+        .find(c => digitos.startsWith(c) && digitos.length > LARGO_LOCAL_POR_PAIS[c]);
+    if (otroPais && otroPais !== cc) return digitos;
+
+    return cc + digitos;
+}
+
+// Los sitios de llamada solo tienen el id del negocio; el codigo de pais vive
+// en la fila ya cargada en negociosData.
+function codigoPaisDeNegocio(negocioId) {
+    const negocio = (typeof negociosData !== 'undefined' ? negociosData : [])
+        .find(n => String(n.id) === String(negocioId));
+    return negocio?.codigo_pais || '';
+}
+
 function enviarWhatsApp(telefono, nombreNegocio, negocioId) {
     if (!telefono || telefono === 'No registrado' || telefono === '') {
         alert(`⚠️ ${nombreNegocio} no tiene número de teléfono registrado`);
         return;
     }
-    
+
     // Registrar la fecha de último contacto
     registrarUltimoContacto(negocioId, 'soporte');
-    
-    let numeroLimpio = telefono.replace(/\D/g, '');
-    if (!numeroLimpio.startsWith('53') && numeroLimpio.length === 8) {
-        numeroLimpio = '53' + numeroLimpio;
-    }
-    
+
+    const numeroLimpio = normalizarTelefonoWhatsApp(telefono, codigoPaisDeNegocio(negocioId));
+
     const mensajeCodificado = encodeURIComponent(WHATSAPP_MENSAJE);
     window.open(`https://wa.me/${numeroLimpio}?text=${mensajeCodificado}`, '_blank');
 }
@@ -1945,12 +1986,9 @@ function enviarWhatsAppSimple(telefono, nombreNegocio, negocioId) {
     
     // Registrar la fecha de último contacto
     registrarUltimoContacto(negocioId, 'hola');
-    
-    let numeroLimpio = telefono.replace(/\D/g, '');
-    if (!numeroLimpio.startsWith('53') && numeroLimpio.length === 8) {
-        numeroLimpio = '53' + numeroLimpio;
-    }
-    
+
+    const numeroLimpio = normalizarTelefonoWhatsApp(telefono, codigoPaisDeNegocio(negocioId));
+
     const mensajeCodificado = encodeURIComponent("Hola");
     window.open(`https://wa.me/${numeroLimpio}?text=${mensajeCodificado}`, '_blank');
 }
@@ -1992,7 +2030,7 @@ async function generarMensajeCliente(negocio) {
     const mensaje = crearMensajeEntregaCliente(negocio);
     const copiado = await copiarAlPortapapeles(mensaje);
     const telefono = obtenerPrimerCampo(negocio, ['telefono', 'whatsapp', 'telefono_negocio']);
-    const numeroLimpio = telefono.replace(/\D/g, '');
+    const numeroFinal = normalizarTelefonoWhatsApp(telefono, negocio?.codigo_pais);
 
     if (copiado) {
         alert('Mensaje copiado. Puedes pegarlo en WhatsApp o editarlo antes de enviarlo.');
@@ -2000,11 +2038,7 @@ async function generarMensajeCliente(negocio) {
         prompt('Copia este mensaje para enviarlo al cliente:', mensaje);
     }
 
-    if (numeroLimpio) {
-        let numeroFinal = numeroLimpio;
-        if (!numeroFinal.startsWith('53') && numeroFinal.length === 8) {
-            numeroFinal = '53' + numeroFinal;
-        }
+    if (numeroFinal) {
         if (confirm('Abrir WhatsApp con este mensaje?')) {
             window.open(`https://wa.me/${numeroFinal}?text=${encodeURIComponent(mensaje)}`, '_blank');
         }
@@ -2335,9 +2369,9 @@ function _filaCobro(item, tipo) {
     else etiqueta = `En ${item.dias} días`;
 
     const color = tipo === 'bloqueado' ? 'text-red-700' : 'text-amber-700';
-    const tel = (n.telefono || '').replace(/\D/g, '');
+    const tel = normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
     const btnWhats = tel
-        ? `<a href="https://wa.me/53${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium">WhatsApp</a>`
+        ? `<a href="https://wa.me/${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium">WhatsApp</a>`
         : '';
 
     return `
@@ -2439,9 +2473,9 @@ function renderSeccionSalud() {
     if (!totalConProblemas) return '';
 
     const filas = criticos.slice(0, 12).map(({ n, problemas, dias }) => {
-        const tel = (n.telefono || '').replace(/\D/g, '');
+        const tel = normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
         const btnWhats = tel
-            ? `<a href="https://wa.me/53${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">WhatsApp</a>`
+            ? `<a href="https://wa.me/${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">WhatsApp</a>`
             : '';
         const etiquetaPlan = n.estado_suscripcion === 'activa'
             ? '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">PAGA</span>'
