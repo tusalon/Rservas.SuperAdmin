@@ -43,9 +43,13 @@
     <div id="panel-header"></div>
     <div id="lista-negocios"></div>
     
+    <!-- Misma build de bcryptjs que usa admin-login.html para VERIFICAR el hash.
+         Si aqui se usara otra version, podrian generarse hashes que el login no
+         sabe comprobar y el salon quedaria fuera de su propio panel. -->
+    <script src="vendor/bcrypt.min.js?v=20260809-cambiar-clave"></script>
     <script src="supabase-config.js?v=20260620-nube-v1"></script>
     <script src="commercial-tracking.js?v=20260728-embudo-v1"></script>
-    <script src="super-admin.js?v=20260728-embudo-v1"></script>
+    <script src="super-admin.js?v=20260809-cambiar-clave"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').then(reg => {

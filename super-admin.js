@@ -1854,6 +1854,124 @@ async function reiniciarNegocioCompleto(id, nombreNegocio) {
     }
 }
 
+// La contrasena del salon se guarda como hash bcrypt en negocios.password_hash
+// y admin-login.html la comprueba con bcrypt.compareSync. Los hashes que ya
+// existen son $2a$12$, asi que hay que generar con el mismo coste 12: si se
+// baja, el salon queda con una contrasena mas debil que el resto sin que se
+// note en ningun sitio.
+//
+// Los hashes nuevos salen con prefijo $2b$ en vez de $2a$ (es la variante
+// moderna de bcrypt); conviven sin problema porque compareSync acepta las dos.
+// Verificado en tools/test-cambiar-password.js.
+const BCRYPT_COSTO = 12;
+
+function getBcrypt() {
+    if (typeof bcrypt !== 'undefined') return bcrypt;
+    // La build UMD antigua se cuelga de dcodeIO, igual que en admin-login.html.
+    if (typeof dcodeIO !== 'undefined' && dcodeIO.bcrypt) return dcodeIO.bcrypt;
+    return null;
+}
+
+function abrirModalCambiarPassword(id, nombreNegocio) {
+    if (!getBcrypt()) {
+        alert('No se pudo cargar el cifrado de contrasenas. Recarga la pagina e intenta de nuevo.');
+        return;
+    }
+
+    const modalExistente = document.getElementById('modal-cambiar-password');
+    if (modalExistente) modalExistente.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-cambiar-password';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">Cambiar contraseña</h3>
+                    <p class="text-sm text-gray-500">${escapeHtml(nombreNegocio)}</p>
+                </div>
+                <button type="button" onclick="document.getElementById('modal-cambiar-password')?.remove()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+
+            <label class="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
+            <input id="password-nueva" type="password" autocomplete="new-password" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+
+            <label class="block text-sm font-medium text-gray-700 mt-4 mb-1">Repetir contraseña</label>
+            <input id="password-repetir" type="password" autocomplete="new-password" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+
+            <label class="flex items-center gap-2 mt-3 text-sm text-gray-600">
+                <input type="checkbox" id="password-ver" class="rounded"> Ver lo que escribo
+            </label>
+
+            <p class="text-xs text-gray-500 mt-3">Se guarda cifrada. Anotala antes de cerrar: despues no hay forma de volver a verla, solo de cambiarla otra vez.</p>
+
+            <div class="flex gap-2 mt-5">
+                <button type="button" onclick="document.getElementById('modal-cambiar-password')?.remove()" class="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">Cancelar</button>
+                <button type="button" id="password-guardar" onclick="window.guardarPasswordNegocio('${id}')" class="flex-1 px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700">Guardar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('password-ver').addEventListener('change', (e) => {
+        const tipo = e.target.checked ? 'text' : 'password';
+        document.getElementById('password-nueva').type = tipo;
+        document.getElementById('password-repetir').type = tipo;
+    });
+    document.getElementById('password-nueva').focus();
+}
+
+async function guardarPasswordNegocio(id) {
+    const nueva = document.getElementById('password-nueva')?.value || '';
+    const repetir = document.getElementById('password-repetir')?.value || '';
+    const boton = document.getElementById('password-guardar');
+
+    if (nueva.length < 6) {
+        alert('La contrasena debe tener al menos 6 caracteres.');
+        return;
+    }
+    if (nueva !== repetir) {
+        alert('Las dos contrasenas no coinciden.');
+        return;
+    }
+    if (!confirm('Cambiar la contrasena de este negocio?\n\nLa anterior deja de servir en cuanto se guarde.')) return;
+
+    const cifrador = getBcrypt();
+    if (!cifrador) {
+        alert('No se pudo cargar el cifrado de contrasenas. Recarga la pagina e intenta de nuevo.');
+        return;
+    }
+
+    try {
+        if (boton) {
+            boton.disabled = true;
+            boton.textContent = 'Guardando...';
+        }
+        // bcrypt con coste 12 bloquea el hilo un par de segundos: hay que dejar
+        // que el navegador pinte "Guardando..." antes, o parece que se colgo.
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        const hash = cifrador.hashSync(nueva, BCRYPT_COSTO);
+
+        const { error } = await window.supabase
+            .from('negocios')
+            .update({ password_hash: hash })
+            .eq('id', id);
+
+        if (error) throw error;
+
+        document.getElementById('modal-cambiar-password')?.remove();
+        alert('Contrasena actualizada. Enviasela al salon para que pueda entrar.');
+    } catch (error) {
+        if (boton) {
+            boton.disabled = false;
+            boton.textContent = 'Guardar';
+        }
+        alert('Error cambiando la contrasena: ' + error.message);
+    }
+}
+
 // FUNCIÓN WHATSAPP ORIGINAL (con mensaje de soporte)
 function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
     const fechaBase = fechaActual || calcularFechaMasDias(DIAS_POR_DEFECTO);
@@ -2934,6 +3052,8 @@ function renderListaNegocios(negocios) {
 
                     <button onclick="window.reiniciarNegocioCompleto('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Reiniciar cuenta</button>
 
+                    <button onclick="window.abrirModalCambiarPassword('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Cambiar contraseña</button>
+
                     <button onclick="window.toggleEliminado('${n.id}')" class="${esEliminado ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-100 text-pink-700 hover:bg-pink-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
                         ${esEliminado ? '👁️ Mostrar en Principal' : '🙈 Ocultar de Vista'}
                     </button>
@@ -3336,6 +3456,8 @@ window.reactivarNegocio = reactivarNegocio;
 window.inactivarNegocio = inactivarNegocio;
 window.borrarNegocioCompleto = borrarNegocioCompleto;
 window.reiniciarNegocioCompleto = reiniciarNegocioCompleto;
+window.abrirModalCambiarPassword = abrirModalCambiarPassword;
+window.guardarPasswordNegocio = guardarPasswordNegocio;
 window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
 window.generarMensajeCliente = generarMensajeCliente;
