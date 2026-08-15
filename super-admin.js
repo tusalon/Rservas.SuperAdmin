@@ -656,7 +656,7 @@ async function cargarNegocios() {
         
         const extrasPromise = window.supabase
             .from('negocios')
-            .select('id,sitio_web,ntfy_topic,es_tienda_externa');
+            .select('id,sitio_web,ntfy_topic,es_tienda_externa,archivado');
 
         // Para "Salones que necesitan ayuda": sin servicios, sin horarios o con
         // servicios que ningun profesional puede dar => no reciben ni una reserva.
@@ -699,7 +699,8 @@ async function cargarNegocios() {
                 ...n,
                 sitio_web: extrasPorId[n.id]?.sitio_web || n.sitio_web || '',
                 ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || '',
-                es_tienda_externa: extrasPorId[n.id]?.es_tienda_externa === true
+                es_tienda_externa: extrasPorId[n.id]?.es_tienda_externa === true,
+                archivado: extrasPorId[n.id]?.archivado === true
             }));
         }
 
@@ -1730,6 +1731,35 @@ async function borrarDatosRelacionadosNegocio(id) {
     return resultados;
 }
 
+// Archivar es lo contrario de "Borrar Supabase": no toca ni una fila de datos,
+// solo saca el negocio de la lista. Para las duenas que se quedaron a medias y
+// pueden volver, que es casi todo el atraso (ver sql-archivar-negocios.sql).
+async function alternarArchivadoNegocio(id, nombreNegocio, estaArchivado) {
+    const accion = estaArchivado ? 'restaurar' : 'archivar';
+    if (!confirm(estaArchivado
+        ? `↩️ ¿Restaurar "${nombreNegocio}"?\n\nVolverá a aparecer en la lista.`
+        : `📦 ¿Archivar "${nombreNegocio}"?\n\nDesaparece de la lista pero NO se borra nada.\nPuedes restaurarlo cuando quieras desde el filtro "Archivados".`)) return;
+
+    const { error } = await window.supabase
+        .from('negocios')
+        .update({ archivado: !estaArchivado, archivado_at: estaArchivado ? null : new Date().toISOString() })
+        .eq('id', id);
+
+    if (error) {
+        const falta = esErrorTablaOColumnaInexistente(error);
+        alert(falta
+            ? '❌ Falta la columna "archivado" en negocios.\n\nEjecuta sql-archivar-negocios.sql en el SQL Editor de Supabase.'
+            : `❌ No se pudo ${accion}: ${error.message}`);
+        return;
+    }
+
+    const negocio = negociosData.find(n => String(n.id) === String(id));
+    if (negocio) negocio.archivado = !estaArchivado;
+    renderHeader();
+    actualizarListaNegocios();
+    actualizarBotonesFiltro();
+}
+
 function limpiarEstadoLocalNegocio(id) {
     pendientesLocal = pendientesLocal.filter(negocioId => negocioId !== id);
     eliminadosLocal = eliminadosLocal.filter(negocioId => negocioId !== id);
@@ -2364,13 +2394,20 @@ function filtrarPorEstado(estado) {
 
 function actualizarListaNegocios() {
     let resultados = [...negociosData];
-    
+
+    // Los archivados solo se ven pidiendolos: en cualquier otro filtro estorban.
+    // "archivado" no borra nada, solo los saca de en medio (ver
+    // sql-archivar-negocios.sql), asi que siempre se pueden devolver.
+    resultados = filtroActual === 'archivados'
+        ? resultados.filter(n => n.archivado === true)
+        : resultados.filter(n => n.archivado !== true);
+
     // Primero aplicar el filtro de estado
     if (filtroActual === 'pendiente') {
         resultados = resultados.filter(n => pendientesLocal.includes(n.id));
     } else if (filtroActual === 'eliminados') {
         resultados = resultados.filter(n => eliminadosLocal.includes(n.id));
-    } else if (filtroActual !== 'todos') {
+    } else if (filtroActual !== 'todos' && filtroActual !== 'archivados') {
         resultados = resultados.filter(n => n.estado_suscripcion === filtroActual);
     }
     
@@ -2392,7 +2429,7 @@ function actualizarListaNegocios() {
 }
 
 function actualizarBotonesFiltro() {
-    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados'];
+    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados', 'archivados'];
     estados.forEach(estado => {
         const btn = document.getElementById(`filtro-${estado}`);
         if (btn) {
@@ -2407,6 +2444,7 @@ function actualizarBotonesFiltro() {
                 else if (estado === 'pendiente') btn.classList.add('bg-purple-600', 'text-white');
                 else if (estado === 'inactiva') btn.classList.add('bg-gray-600', 'text-white');
                 else if (estado === 'eliminados') btn.classList.add('bg-pink-600', 'text-white');
+                else if (estado === 'archivados') btn.classList.add('bg-slate-600', 'text-white');
             } else {
                 if (estado === 'todos') btn.classList.add('bg-gray-200', 'text-gray-700');
                 else if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
@@ -2415,6 +2453,7 @@ function actualizarBotonesFiltro() {
                 else if (estado === 'pendiente') btn.classList.add('bg-purple-100', 'text-purple-700');
                 else if (estado === 'inactiva') btn.classList.add('bg-gray-100', 'text-gray-700');
                 else if (estado === 'eliminados') btn.classList.add('bg-pink-100', 'text-pink-700');
+                else if (estado === 'archivados') btn.classList.add('bg-slate-100', 'text-slate-700');
             }
         }
     });
@@ -2771,14 +2810,18 @@ function renderSeccionRomaHub() {
 
 function renderHeader() {
     const stats = calcularEstadisticas(negociosData);
+    // Los contadores tienen que cuadrar con lo que enseña cada filtro, y los
+    // filtros ya no muestran archivados: si no, "Todos (379)" abriria 306.
+    const visibles = negociosData.filter(n => n.archivado !== true);
     const totalPorEstado = {
-        todos: negociosData.length,
-        activa: negociosData.filter(n => n.estado_suscripcion === 'activa').length,
-        suspendida: negociosData.filter(n => n.estado_suscripcion === 'suspendida').length,
-        trial: negociosData.filter(n => n.estado_suscripcion === 'trial').length,
-        pendiente: negociosData.filter(n => pendientesLocal.includes(n.id)).length,
-        inactiva: negociosData.filter(n => n.estado_suscripcion === 'inactiva').length,
-        eliminados: negociosData.filter(n => eliminadosLocal.includes(n.id)).length
+        todos: visibles.length,
+        activa: visibles.filter(n => n.estado_suscripcion === 'activa').length,
+        suspendida: visibles.filter(n => n.estado_suscripcion === 'suspendida').length,
+        trial: visibles.filter(n => n.estado_suscripcion === 'trial').length,
+        pendiente: visibles.filter(n => pendientesLocal.includes(n.id)).length,
+        inactiva: visibles.filter(n => n.estado_suscripcion === 'inactiva').length,
+        eliminados: visibles.filter(n => eliminadosLocal.includes(n.id)).length,
+        archivados: negociosData.filter(n => n.archivado === true).length
     };
     
     // Obtener la fecha actual formateada
@@ -2904,6 +2947,7 @@ function renderHeader() {
                 <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
                 <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
                 <button id="filtro-eliminados" onclick="filtrarPorEstado('eliminados')" class="px-3 py-1.5 rounded-lg text-sm bg-pink-100 text-pink-700">🗑️ Eliminados (${totalPorEstado.eliminados})</button>
+                <button id="filtro-archivados" onclick="filtrarPorEstado('archivados')" class="px-3 py-1.5 rounded-lg text-sm bg-slate-100 text-slate-700">📦 Archivados (${totalPorEstado.archivados})</button>
             </div>
         </div>
     `;
@@ -3053,6 +3097,8 @@ function renderListaNegocios(negocios) {
                     <button onclick="window.reiniciarNegocioCompleto('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Reiniciar cuenta</button>
 
                     <button onclick="window.abrirModalCambiarPassword('${n.id}', '${n.nombre.replace(/'/g, "\\'")}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Cambiar contraseña</button>
+
+                    <button onclick="window.alternarArchivadoNegocio('${n.id}', '${n.nombre.replace(/'/g, "\\'")}', ${n.archivado === true})" class="${n.archivado ? 'bg-slate-600 hover:bg-slate-700 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">${n.archivado ? '↩️ Restaurar' : '📦 Archivar'}</button>
 
                     <button onclick="window.toggleEliminado('${n.id}')" class="${esEliminado ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-100 text-pink-700 hover:bg-pink-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
                         ${esEliminado ? '👁️ Mostrar en Principal' : '🙈 Ocultar de Vista'}
@@ -3457,6 +3503,7 @@ window.inactivarNegocio = inactivarNegocio;
 window.borrarNegocioCompleto = borrarNegocioCompleto;
 window.reiniciarNegocioCompleto = reiniciarNegocioCompleto;
 window.abrirModalCambiarPassword = abrirModalCambiarPassword;
+window.alternarArchivadoNegocio = alternarArchivadoNegocio;
 window.guardarPasswordNegocio = guardarPasswordNegocio;
 window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
