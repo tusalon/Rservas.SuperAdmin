@@ -2692,7 +2692,7 @@ async function cargarTiendasPorAprobar() {
     try {
         const { data: tiendas, error } = await window.supabase
             .from('negocios')
-            .select('id,nombre,telefono,especialidad,provincia,municipio,logo_url,mensaje_bienvenida,romahub_enviado_at')
+            .select('id,nombre,telefono,especialidad,provincia,municipio,logo_url,imagen_fondo_url,mensaje_bienvenida,romahub_enviado_at')
             .eq('es_tienda_externa', true)
             .eq('romahub_estado', 'en_revision')
             .order('romahub_enviado_at', { ascending: true });
@@ -2704,8 +2704,8 @@ async function cargarTiendasPorAprobar() {
 
         const ids = tiendas.map(t => t.id);
         const [{ data: productos }, { data: cursos }] = await Promise.all([
-            window.supabase.from('productos').select('id,negocio_id,nombre,precio,moneda,imagen_url,stock,activo').in('negocio_id', ids),
-            window.supabase.from('cursos').select('id,negocio_id,nombre,precio,moneda,imagen_url,cupos,activo').in('negocio_id', ids)
+            window.supabase.from('productos').select('id,negocio_id,nombre,descripcion,precio,moneda,imagen_url,stock,activo').in('negocio_id', ids),
+            window.supabase.from('cursos').select('id,negocio_id,nombre,descripcion,precio,moneda,imagen_url,cupos,activo').in('negocio_id', ids)
         ]);
 
         return tiendas.map(t => ({
@@ -2822,42 +2822,93 @@ function mostrarAccesoRestablecido(nombre, acceso) {
 }
 window.restablecerAccesoTienda = restablecerAccesoTienda;
 
+// Busca un producto/curso dentro de tiendasPorAprobarData por su id, para
+// abrir el modal de detalle sin tener que serializar el objeto en el HTML.
+function buscarArticuloPorAprobar(tipo, itemId) {
+    for (const t of tiendasPorAprobarData) {
+        const lista = tipo === 'curso' ? t.cursos : t.productos;
+        const item = (lista || []).find(i => String(i.id) === String(itemId));
+        if (item) return { ...item, tiendaNombre: t.nombre, tipo };
+    }
+    return null;
+}
+
+function verArticuloPorAprobar(tipo, itemId) {
+    const item = buscarArticuloPorAprobar(tipo, itemId);
+    if (!item) return;
+
+    const modalExistente = document.getElementById('modal-articulo-tienda');
+    if (modalExistente) modalExistente.remove();
+
+    const disponibilidad = item.tipo === 'curso'
+        ? (item.cupos === 0 ? '<span class="text-red-600 font-bold">Sin cupos</span>' : item.cupos != null ? `${item.cupos} cupos` : '')
+        : (item.stock === 0 ? '<span class="text-red-600 font-bold">Sin stock</span>' : item.stock != null ? `Stock: ${item.stock}` : '');
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-articulo-tienda';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div class="relative aspect-square bg-gray-100">
+                ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-5xl">🛍️</div>'}
+                <button type="button" onclick="document.getElementById('modal-articulo-tienda')?.remove()" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 text-gray-700 text-xl leading-none">&times;</button>
+                ${item.tipo === 'curso' ? '<span class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-gray-900 text-white text-[11px] font-bold">Curso</span>' : ''}
+            </div>
+            <div class="p-4">
+                <p class="text-xs text-gray-400">${escapeHtml(item.tiendaNombre || '')}</p>
+                <p class="font-bold text-gray-900 text-lg">${escapeHtml(item.nombre || '(sin nombre)')}</p>
+                <div class="flex items-center gap-3 mt-1">
+                    <p class="font-bold text-pink-700">${Number(item.precio || 0)} ${escapeHtml(item.moneda || 'CUP')}</p>
+                    ${disponibilidad ? `<p class="text-sm text-gray-500">${disponibilidad}</p>` : ''}
+                </div>
+                ${item.descripcion ? `<p class="text-sm text-gray-600 mt-3 leading-relaxed">${escapeHtml(item.descripcion)}</p>` : '<p class="text-sm text-gray-400 mt-3 italic">Sin descripción.</p>'}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+window.verArticuloPorAprobar = verArticuloPorAprobar;
+
 function renderTiendasPorAprobar() {
     if (!tiendasPorAprobarData.length) return '';
 
-    const tarjetaArticulo = (item) => `
-        <div class="shrink-0 w-24 text-center">
-            <div class="w-24 h-24 rounded-lg bg-gray-100 overflow-hidden border border-gray-200">
+    const tarjetaArticulo = (item, tipo) => `
+        <button type="button" onclick="verArticuloPorAprobar('${tipo}', '${item.id}')" class="text-left group">
+            <div class="relative aspect-square rounded-lg bg-gray-100 overflow-hidden border border-gray-200 group-hover:border-purple-400 transition">
                 ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>'}
+                ${(tipo === 'curso' ? item.cupos === 0 : item.stock === 0) ? '<span class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/80 text-white text-[9px] font-bold">Sin stock</span>' : ''}
             </div>
             <p class="mt-1 text-[11px] text-gray-700 truncate">${escapeHtml(item.nombre || '(sin nombre)')}</p>
             <p class="text-[11px] font-bold text-pink-700">${Number(item.precio || 0)} ${escapeHtml(item.moneda || 'CUP')}</p>
-        </div>
+        </button>
     `;
 
     const tarjetas = tiendasPorAprobarData.map(t => {
-        const articulos = [...t.productos, ...t.cursos];
+        const articulos = [...t.productos.map(p => ({ item: p, tipo: 'producto' })), ...t.cursos.map(c => ({ item: c, tipo: 'curso' }))];
         return `
-            <div class="border border-gray-200 rounded-xl p-4 mb-3 last:mb-0">
-                <div class="flex items-start gap-3">
+            <details class="border border-gray-200 rounded-xl mb-3 last:mb-0" open>
+                <summary class="p-4 cursor-pointer list-none flex items-start gap-3">
                     <div class="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 shrink-0">
                         ${t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-xl">🏪</div>'}
                     </div>
                     <div class="min-w-0 flex-1">
-                        <p class="font-bold text-gray-800">${escapeHtml(t.nombre || '(sin nombre)')}</p>
+                        <p class="font-bold text-gray-800">${escapeHtml(t.nombre || '(sin nombre)')} <span class="text-gray-400 font-normal text-xs">(${articulos.length} art.)</span></p>
                         <p class="text-xs text-gray-500">${escapeHtml(t.especialidad || 'Belleza')} · ${escapeHtml(t.provincia || '')}${t.municipio ? ' · ' + escapeHtml(t.municipio) : ''} · ${escapeHtml(t.telefono || 'sin WhatsApp')}</p>
                         ${t.mensaje_bienvenida ? `<p class="text-xs text-gray-500 mt-1 italic">"${escapeHtml(t.mensaje_bienvenida)}"</p>` : ''}
                     </div>
                     <div class="flex gap-1.5 shrink-0">
-                        <button onclick="aprobarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">✅ Aprobar</button>
-                        <button onclick="rechazarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Rechazar</button>
-                        <button onclick="restablecerAccesoTienda('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold">🔑 Acceso</button>
+                        <button onclick="event.stopPropagation(); aprobarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">✅ Aprobar</button>
+                        <button onclick="event.stopPropagation(); rechazarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Rechazar</button>
+                        <button onclick="event.stopPropagation(); restablecerAccesoTienda('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold">🔑 Acceso</button>
+                    </div>
+                </summary>
+                <div class="px-4 pb-4">
+                    ${t.imagen_fondo_url ? `<div class="h-28 rounded-lg overflow-hidden mb-3"><img src="${escapeHtml(t.imagen_fondo_url)}" alt="Portada" class="w-full h-full object-cover"></div>` : ''}
+                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                        ${articulos.length ? articulos.map(a => tarjetaArticulo(a.item, a.tipo)).join('') : '<p class="col-span-full text-xs text-gray-400">Sin productos/cursos activos (no debería poder enviar a revisión).</p>'}
                     </div>
                 </div>
-                <div class="mt-3 flex gap-2.5 overflow-x-auto pb-1">
-                    ${articulos.length ? articulos.map(tarjetaArticulo).join('') : '<p class="text-xs text-gray-400">Sin productos/cursos activos (no debería poder enviar a revisión).</p>'}
-                </div>
-            </div>
+            </details>
         `;
     }).join('');
 
