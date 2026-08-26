@@ -2326,7 +2326,9 @@ async function notificarATodos() {
 }
 
 async function exportarCSV() {
-    let resultados = [...negociosData];
+    // Exportacion comercial (segmento, prioridad, seguimiento): es de
+    // RservasRoma, las tiendas RomaHub gratis no aplican a esto.
+    let resultados = negociosData.filter(n => n.es_tienda_externa !== true);
     if (filtroActual !== 'todos') {
         if (filtroActual === 'eliminados') {
             resultados = resultados.filter(n => eliminadosLocal.includes(n.id));
@@ -2396,7 +2398,10 @@ function filtrarPorEstado(estado) {
 }
 
 function actualizarListaNegocios() {
-    let resultados = [...negociosData];
+    // Las tiendas RomaHub no son negocios de RservasRoma (sin agenda, sin
+    // suscripcion): esta lista y sus filtros son solo para RservasRoma. Las
+    // tiendas se ven y aprueban en renderTiendasPorAprobar/renderSeccionRomaHub.
+    let resultados = negociosData.filter(n => n.es_tienda_externa !== true);
 
     // Los archivados solo se ven pidiendolos: en cualquier otro filtro estorban.
     // "archivado" no borra nada, solo los saca de en medio (ver
@@ -2491,6 +2496,8 @@ function calcularCobros(negocios) {
 
     (negocios || []).forEach(n => {
         if (eliminadosLocal.includes(n.id)) return;
+        // Las tiendas RomaHub son gratis, sin suscripcion que cobrar.
+        if (n.es_tienda_externa === true) return;
 
         if (n.estado_suscripcion === 'suspendida') {
             bloqueados.push({ n, dias: null, fecha: fechaPagoDe(n), motivo: 'suspendida' });
@@ -2606,6 +2613,10 @@ function calcularSalud(negocios) {
 
     (negocios || []).forEach(n => {
         if (eliminadosLocal.includes(n.id)) return;
+        // Las tiendas RomaHub no tienen servicios/horarios de reserva por diseno
+        // (venden por WhatsApp): no son un salon "roto", tienen su propia
+        // moderacion en renderTiendasPorAprobar/renderSeccionRomaHub.
+        if (n.es_tienda_externa === true) return;
         if (n.estado_suscripcion === 'inactiva') return;
         const problemas = diagnosticarNegocio(n);
         if (!problemas.length) return;
@@ -2938,10 +2949,14 @@ function renderSeccionRomaHub() {
 }
 
 function renderHeader() {
-    const stats = calcularEstadisticas(negociosData);
+    // Las tiendas RomaHub tienen su propio conteo en renderTiendasPorAprobar/
+    // renderSeccionRomaHub: aqui solo entran negocios de RservasRoma, para que
+    // "Todos" y las estadisticas no se inflen con tiendas gratis sin agenda.
+    const negociosRservasRoma = negociosData.filter(n => n.es_tienda_externa !== true);
+    const stats = calcularEstadisticas(negociosRservasRoma);
     // Los contadores tienen que cuadrar con lo que enseña cada filtro, y los
     // filtros ya no muestran archivados: si no, "Todos (379)" abriria 306.
-    const visibles = negociosData.filter(n => n.archivado !== true);
+    const visibles = negociosRservasRoma.filter(n => n.archivado !== true);
     const totalPorEstado = {
         todos: visibles.length,
         activa: visibles.filter(n => n.estado_suscripcion === 'activa').length,
@@ -2950,7 +2965,7 @@ function renderHeader() {
         pendiente: visibles.filter(n => pendientesLocal.includes(n.id)).length,
         inactiva: visibles.filter(n => n.estado_suscripcion === 'inactiva').length,
         eliminados: visibles.filter(n => eliminadosLocal.includes(n.id)).length,
-        archivados: negociosData.filter(n => n.archivado === true).length
+        archivados: negociosRservasRoma.filter(n => n.archivado === true).length
     };
     
     // Obtener la fecha actual formateada
@@ -3860,8 +3875,9 @@ async function init() {
     negociosData = negocios;
     renderHeader();
     
-    // Ordenar por reservas por defecto
-    const negociosOrdenados = ordenarNegocios(negocios, 'reservas');
+    // Ordenar por reservas por defecto. Las tiendas RomaHub no entran aqui
+    // (ver actualizarListaNegocios): se ven en su propia seccion.
+    const negociosOrdenados = ordenarNegocios(negocios.filter(n => n.es_tienda_externa !== true), 'reservas');
     renderListaNegocios(negociosOrdenados);
     actualizarBotonesFiltro();
     actualizarBotonOrden();
