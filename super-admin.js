@@ -511,6 +511,7 @@ let ordenActual = "reservas"; // 'reservas', 'semana' o 'fecha'
 let reservasDiarias = 0;
 let reservasDiariasData = [];
 let reportesTiendaData = [];
+let tiendasPorAprobarData = [];
 let reservasSemanaData = [];
 let ultimaCitaPorNegocio = {};
 let actividadReservasCargada = false;
@@ -656,7 +657,7 @@ async function cargarNegocios() {
         
         const extrasPromise = window.supabase
             .from('negocios')
-            .select('id,sitio_web,ntfy_topic,es_tienda_externa,archivado');
+            .select('id,sitio_web,ntfy_topic,es_tienda_externa,archivado,romahub_estado,romahub_nota_rechazo');
 
         // Para "Salones que necesitan ayuda": sin servicios, sin horarios o con
         // servicios que ningun profesional puede dar => no reciben ni una reserva.
@@ -700,7 +701,9 @@ async function cargarNegocios() {
                 sitio_web: extrasPorId[n.id]?.sitio_web || n.sitio_web || '',
                 ntfy_topic: extrasPorId[n.id]?.ntfy_topic || n.ntfy_topic || '',
                 es_tienda_externa: extrasPorId[n.id]?.es_tienda_externa === true,
-                archivado: extrasPorId[n.id]?.archivado === true
+                archivado: extrasPorId[n.id]?.archivado === true,
+                romahub_estado: extrasPorId[n.id]?.romahub_estado || 'aprobada',
+                romahub_nota_rechazo: extrasPorId[n.id]?.romahub_nota_rechazo || ''
             }));
         }
 
@@ -2670,6 +2673,124 @@ function renderSeccionSalud() {
     `;
 }
 
+// ==================== APROBACIÓN ROMAHUB (tiendas nuevas antes de publicarse) ====================
+// Una tienda externa nace en romahub_estado='borrador' y no se ve en RomaHub.
+// La duena la envia a 'en_revision' desde su panel al subir 3+ articulos.
+// Aqui se revisan los productos/cursos reales antes de publicar la tienda.
+async function cargarTiendasPorAprobar() {
+    try {
+        const { data: tiendas, error } = await window.supabase
+            .from('negocios')
+            .select('id,nombre,telefono,especialidad,provincia,municipio,logo_url,mensaje_bienvenida,romahub_enviado_at')
+            .eq('es_tienda_externa', true)
+            .eq('romahub_estado', 'en_revision')
+            .order('romahub_enviado_at', { ascending: true });
+        if (error) {
+            console.warn('No se pudieron cargar las tiendas por aprobar:', error.message);
+            return [];
+        }
+        if (!tiendas || !tiendas.length) return [];
+
+        const ids = tiendas.map(t => t.id);
+        const [{ data: productos }, { data: cursos }] = await Promise.all([
+            window.supabase.from('productos').select('id,negocio_id,nombre,precio,moneda,imagen_url,stock,activo').in('negocio_id', ids),
+            window.supabase.from('cursos').select('id,negocio_id,nombre,precio,moneda,imagen_url,cupos,activo').in('negocio_id', ids)
+        ]);
+
+        return tiendas.map(t => ({
+            ...t,
+            productos: (productos || []).filter(p => p.negocio_id === t.id && p.activo !== false),
+            cursos: (cursos || []).filter(c => c.negocio_id === t.id && c.activo !== false)
+        }));
+    } catch (error) {
+        console.warn('Error cargando tiendas por aprobar:', error);
+        return [];
+    }
+}
+
+async function aprobarTiendaExterna(id, nombre) {
+    if (!confirm(`✅ ¿Aprobar y publicar la tienda "${nombre}" en RomaHub?\n\nSe verá en el directorio con insignia de tienda verificada.`)) return;
+    try {
+        const { error } = await window.supabase.from('negocios').update({
+            configurado: true,
+            romahub_estado: 'aprobada',
+            romahub_revisado_at: new Date().toISOString(),
+            romahub_nota_rechazo: null
+        }).eq('id', id);
+        if (error) throw error;
+        alert(`✅ "${nombre}" ya está publicada en RomaHub.`);
+        location.reload();
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+async function rechazarTiendaExterna(id, nombre) {
+    const motivo = prompt(`🚫 Motivo del rechazo para "${nombre}" (lo verá la dueña en su panel):`);
+    if (!motivo || !motivo.trim()) return;
+    try {
+        const { error } = await window.supabase.from('negocios').update({
+            romahub_estado: 'rechazada',
+            romahub_revisado_at: new Date().toISOString(),
+            romahub_nota_rechazo: motivo.trim().slice(0, 600)
+        }).eq('id', id);
+        if (error) throw error;
+        alert(`Tienda "${nombre}" rechazada. La dueña verá el motivo en su panel.`);
+        location.reload();
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+function renderTiendasPorAprobar() {
+    if (!tiendasPorAprobarData.length) return '';
+
+    const tarjetaArticulo = (item) => `
+        <div class="shrink-0 w-24 text-center">
+            <div class="w-24 h-24 rounded-lg bg-gray-100 overflow-hidden border border-gray-200">
+                ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>'}
+            </div>
+            <p class="mt-1 text-[11px] text-gray-700 truncate">${escapeHtml(item.nombre || '(sin nombre)')}</p>
+            <p class="text-[11px] font-bold text-pink-700">${Number(item.precio || 0)} ${escapeHtml(item.moneda || 'CUP')}</p>
+        </div>
+    `;
+
+    const tarjetas = tiendasPorAprobarData.map(t => {
+        const articulos = [...t.productos, ...t.cursos];
+        return `
+            <div class="border border-gray-200 rounded-xl p-4 mb-3 last:mb-0">
+                <div class="flex items-start gap-3">
+                    <div class="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 shrink-0">
+                        ${t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-xl">🏪</div>'}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-bold text-gray-800">${escapeHtml(t.nombre || '(sin nombre)')}</p>
+                        <p class="text-xs text-gray-500">${escapeHtml(t.especialidad || 'Belleza')} · ${escapeHtml(t.provincia || '')}${t.municipio ? ' · ' + escapeHtml(t.municipio) : ''} · ${escapeHtml(t.telefono || 'sin WhatsApp')}</p>
+                        ${t.mensaje_bienvenida ? `<p class="text-xs text-gray-500 mt-1 italic">"${escapeHtml(t.mensaje_bienvenida)}"</p>` : ''}
+                    </div>
+                    <div class="flex gap-1.5 shrink-0">
+                        <button onclick="aprobarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">✅ Aprobar</button>
+                        <button onclick="rechazarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Rechazar</button>
+                    </div>
+                </div>
+                <div class="mt-3 flex gap-2.5 overflow-x-auto pb-1">
+                    ${articulos.length ? articulos.map(tarjetaArticulo).join('') : '<p class="text-xs text-gray-400">Sin productos/cursos activos (no debería poder enviar a revisión).</p>'}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden border-2 border-amber-300">
+            <div class="bg-amber-50 px-4 py-2.5 border-b border-amber-100">
+                <span class="font-bold text-amber-800 text-sm">⏳ Tiendas por aprobar (${tiendasPorAprobarData.length})</span>
+                <p class="text-xs text-amber-700 mt-0.5">Revisa los productos antes de publicar. Se ven en RomaHub solo tras aprobarlas.</p>
+            </div>
+            <div class="px-4 py-3">${tarjetas}</div>
+        </div>
+    `;
+}
+
 // ==================== MODERACIÓN ROMAHUB (tiendas externas + reportes) ====================
 // Las tiendas externas (es_tienda_externa=true) son vendedores sin cuenta
 // rservasroma que se auto-registraron gratis en RomaHub (crear-tienda.html).
@@ -2746,6 +2867,13 @@ function renderSeccionRomaHub() {
         const badgeEstado = oculta
             ? '<span class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-bold">Oculta</span>'
             : '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">Visible</span>';
+        const romahubEstadoBadges = {
+            borrador: '<span class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-bold">Borrador</span>',
+            en_revision: '<span class="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">⏳ En revisión</span>',
+            rechazada: '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">Rechazada</span>',
+            aprobada: '<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">✓ Verificada</span>'
+        };
+        const badgeRomahub = romahubEstadoBadges[n.romahub_estado] || '';
         const btnToggle = oculta
             ? `<button onclick="activarTiendaExterna('${n.id}', '${escapeHtml(n.nombre).replace(/'/g, "\\'")}')" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">Reactivar</button>`
             : `<button onclick="ocultarTiendaExterna('${n.id}', '${escapeHtml(n.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">Ocultar</button>`;
@@ -2755,6 +2883,7 @@ function renderSeccionRomaHub() {
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="font-medium text-gray-800 text-sm truncate">${escapeHtml(n.nombre || '(sin nombre)')}</span>
                         ${badgeEstado}
+                        ${badgeRomahub}
                         ${badgeReportes}
                     </div>
                     <div class="text-xs text-gray-400">${escapeHtml(n.provincia || 'sin provincia')}${n.municipio ? ' · ' + escapeHtml(n.municipio) : ''}</div>
@@ -2870,6 +2999,7 @@ function renderHeader() {
                 </div>
             </div>
 
+            ${renderTiendasPorAprobar()}
             ${renderSeccionRomaHub()}
 
             ${window.renderEmbudoComercial ? window.renderEmbudoComercial() : ''}
@@ -3756,6 +3886,10 @@ async function init() {
     // el panel si la tabla aun no existe (F5 recien desplegado).
     cargarReportesTienda().then(reportes => {
         reportesTiendaData = reportes;
+        renderHeader();
+    });
+    cargarTiendasPorAprobar().then(tiendas => {
+        tiendasPorAprobarData = tiendas;
         renderHeader();
     });
 }
