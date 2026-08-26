@@ -2753,6 +2753,75 @@ async function rechazarTiendaExterna(id, nombre) {
     }
 }
 
+// La contraseña y el codigo de recuperacion de una tienda RomaHub se
+// muestran una sola vez al crearla y nunca se guardan legibles: si la
+// duena los pierde, esta es la unica forma de devolverle el acceso.
+async function restablecerAccesoTienda(id, nombre) {
+    if (!confirm(`🔑 ¿Restablecer el acceso de "${nombre}"?\n\nLa contraseña y el código de recuperación actuales dejan de servir. Vas a recibir unos nuevos para dárselos a la dueña.`)) return;
+    try {
+        const { data: sessionData } = await window.supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) { alert('❌ Tu sesión expiró. Recarga la página e intenta de nuevo.'); return; }
+
+        const response = await fetch(`${window.SUPABASE_URL}/functions/v1/admin-resetear-acceso-tienda`, {
+            method: 'POST',
+            headers: { apikey: window.SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ negocio_id: id })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'No se pudo restablecer el acceso.');
+
+        mostrarAccesoRestablecido(nombre, data.acceso);
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+function mostrarAccesoRestablecido(nombre, acceso) {
+    const modalExistente = document.getElementById('modal-acceso-restablecido');
+    if (modalExistente) modalExistente.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-acceso-restablecido';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+            <div class="flex items-start justify-between gap-3 mb-1">
+                <h3 class="text-lg font-bold text-gray-900">✅ Acceso restablecido</h3>
+                <button type="button" onclick="document.getElementById('modal-acceso-restablecido')?.remove()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">${escapeHtml(nombre)} — envíaselo por WhatsApp a la dueña. No vuelve a mostrarse.</p>
+
+            <div class="space-y-2">
+                <div class="flex items-center justify-between gap-3 bg-gray-50 rounded-lg p-3">
+                    <div>
+                        <p class="text-[11px] uppercase tracking-wide text-gray-400 font-bold">Usuario (WhatsApp)</p>
+                        <p class="text-base font-bold text-gray-900">${escapeHtml(acceso.usuario)}</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between gap-3 bg-pink-50 rounded-lg p-3">
+                    <div>
+                        <p class="text-[11px] uppercase tracking-wide text-pink-500 font-bold">Contraseña nueva</p>
+                        <p class="text-base font-bold text-gray-900 font-mono">${escapeHtml(acceso.password)}</p>
+                    </div>
+                    <button type="button" onclick="navigator.clipboard?.writeText('${escapeHtml(acceso.password)}')" class="text-xs font-semibold text-pink-600 hover:text-pink-700 shrink-0">Copiar</button>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p class="text-[11px] uppercase tracking-wide text-amber-700 font-bold">Código de recuperación nuevo</p>
+                    <div class="mt-1 flex items-center justify-between gap-3">
+                        <code class="text-sm font-bold tracking-wider text-gray-900">${escapeHtml(acceso.codigo_recuperacion)}</code>
+                        <button type="button" onclick="navigator.clipboard?.writeText('${escapeHtml(acceso.codigo_recuperacion)}')" class="text-xs font-semibold text-amber-700 hover:text-amber-800 shrink-0">Copiar</button>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" onclick="document.getElementById('modal-acceso-restablecido')?.remove()" class="mt-5 w-full px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700">Listo</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+window.restablecerAccesoTienda = restablecerAccesoTienda;
+
 function renderTiendasPorAprobar() {
     if (!tiendasPorAprobarData.length) return '';
 
@@ -2782,6 +2851,7 @@ function renderTiendasPorAprobar() {
                     <div class="flex gap-1.5 shrink-0">
                         <button onclick="aprobarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">✅ Aprobar</button>
                         <button onclick="rechazarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Rechazar</button>
+                        <button onclick="restablecerAccesoTienda('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold">🔑 Acceso</button>
                     </div>
                 </div>
                 <div class="mt-3 flex gap-2.5 overflow-x-auto pb-1">
@@ -2899,7 +2969,10 @@ function renderSeccionRomaHub() {
                     </div>
                     <div class="text-xs text-gray-400">${escapeHtml(n.provincia || 'sin provincia')}${n.municipio ? ' · ' + escapeHtml(n.municipio) : ''}</div>
                 </div>
-                ${btnToggle}
+                <div class="flex gap-1.5 shrink-0">
+                    <button onclick="restablecerAccesoTienda('${n.id}', '${escapeHtml(n.nombre).replace(/'/g, "\\'")}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded text-xs font-medium">🔑 Acceso</button>
+                    ${btnToggle}
+                </div>
             </div>
         `;
     }).join('');
