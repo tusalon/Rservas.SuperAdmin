@@ -2887,16 +2887,18 @@ function renderTiendasPorAprobar() {
         const articulos = [...t.productos.map(p => ({ item: p, tipo: 'producto' })), ...t.cursos.map(c => ({ item: c, tipo: 'curso' }))];
         return `
             <details class="border border-gray-200 rounded-xl mb-3 last:mb-0" open>
-                <summary class="p-4 cursor-pointer list-none flex items-start gap-3">
-                    <div class="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 shrink-0">
-                        ${t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-xl">🏪</div>'}
+                <summary class="p-4 cursor-pointer list-none flex flex-col sm:flex-row sm:items-start gap-3">
+                    <div class="flex items-start gap-3 min-w-0 flex-1">
+                        <div class="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 shrink-0">
+                            ${t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-xl">🏪</div>'}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="font-bold text-gray-800">${escapeHtml(t.nombre || '(sin nombre)')} <span class="text-gray-400 font-normal text-xs">(${articulos.length} art.)</span></p>
+                            <p class="text-xs text-gray-500">${escapeHtml(t.especialidad || 'Belleza')} · ${escapeHtml(t.provincia || '')}${t.municipio ? ' · ' + escapeHtml(t.municipio) : ''} · ${escapeHtml(t.telefono || 'sin WhatsApp')}</p>
+                            ${t.mensaje_bienvenida ? `<p class="text-xs text-gray-500 mt-1 italic">"${escapeHtml(t.mensaje_bienvenida)}"</p>` : ''}
+                        </div>
                     </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="font-bold text-gray-800">${escapeHtml(t.nombre || '(sin nombre)')} <span class="text-gray-400 font-normal text-xs">(${articulos.length} art.)</span></p>
-                        <p class="text-xs text-gray-500">${escapeHtml(t.especialidad || 'Belleza')} · ${escapeHtml(t.provincia || '')}${t.municipio ? ' · ' + escapeHtml(t.municipio) : ''} · ${escapeHtml(t.telefono || 'sin WhatsApp')}</p>
-                        ${t.mensaje_bienvenida ? `<p class="text-xs text-gray-500 mt-1 italic">"${escapeHtml(t.mensaje_bienvenida)}"</p>` : ''}
-                    </div>
-                    <div class="flex gap-1.5 shrink-0">
+                    <div class="flex flex-wrap gap-1.5 shrink-0">
                         <button onclick="event.stopPropagation(); aprobarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">✅ Aprobar</button>
                         <button onclick="event.stopPropagation(); rechazarTiendaExterna('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Rechazar</button>
                         <button onclick="event.stopPropagation(); restablecerAccesoTienda('${t.id}', '${escapeHtml(t.nombre).replace(/'/g, "\\'")}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold">🔑 Acceso</button>
