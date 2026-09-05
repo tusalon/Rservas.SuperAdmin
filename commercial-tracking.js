@@ -565,6 +565,11 @@ window.aplicarFiltroComercial = aplicarFiltroComercial;
 window.ordenarPorPrioridadComercial = ordenarPorPrioridadComercial;
 window.filtrarComercial = filtrarComercial;
 window.limpiarFiltroComercial = limpiarFiltroComercial;
+// Lo consulta el panel cuando el embudo esta plegado: si queda un filtro suyo
+// aplicado, la lista se ve recortada y hay que ofrecer el "Ver todos" fuera del
+// panel. Se expone solo esta pregunta, no commercialState entero, para que
+// nadie de fuera pueda escribir en el estado.
+window.hayFiltroComercialActivo = () => commercialState.filter !== 'todos';
 window.abrirSeguimientoComercial = abrirSeguimientoComercial;
 window.cerrarSeguimientoComercial = cerrarSeguimientoComercial;
 window.guardarSeguimientoComercial = guardarSeguimientoComercial;

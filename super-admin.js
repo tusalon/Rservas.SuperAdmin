@@ -650,14 +650,49 @@ async function traerTodo(tabla, columnas, aplicarFiltros) {
     return { data: todo };
 }
 
+// Pide columnas sueltas de negocios y, si alguna no existe todavia en esta
+// base, la deja fuera y vuelve a intentar.
+//
+// POR QUE: la consulta pedia "archivado", que solo existe si se corrio
+// sql-archivar-negocios.sql. Donde no se corrio, Postgres rechaza la consulta
+// ENTERA (42703) y el panel se quedaba sin NINGUN extra: es_tienda_externa
+// llegaba siempre en falso — o sea que las tiendas de RomaHub se mezclaban con
+// los salones — y romahub_estado siempre como "aprobada". Fallaba en silencio,
+// solo con un warning en la consola.
+async function traerExtrasNegocios(columnas) {
+    let pedidas = [...columnas];
+
+    for (let intento = 0; intento < columnas.length; intento++) {
+        const { data, error } = await window.supabase
+            .from('negocios')
+            .select(pedidas.join(','));
+
+        if (!error) return { data, faltantes: columnas.filter(c => !pedidas.includes(c)) };
+
+        // 42703 = columna inexistente. El mensaje la nombra: se quita y se reintenta.
+        const nombre = (error.message || '').match(/column [^.]*\.?([a-z0-9_]+) does not exist/i)?.[1];
+        if (error.code !== '42703' || !nombre || !pedidas.includes(nombre)) {
+            return { data: null, error, faltantes: [] };
+        }
+        pedidas = pedidas.filter(c => c !== nombre);
+        if (pedidas.length <= 1) return { data: null, error, faltantes: [] };
+    }
+
+    return { data: null, error: new Error('Demasiadas columnas inexistentes'), faltantes: [] };
+}
+
 // ==================== CARGAR NEGOCIOS ====================
 async function cargarNegocios() {
     try {
         console.log('🔄 Cargando negocios...');
         
-        const extrasPromise = window.supabase
-            .from('negocios')
-            .select('id,sitio_web,ntfy_topic,es_tienda_externa,archivado,romahub_estado,romahub_nota_rechazo');
+        // "configurado" no viene en vista_negocios_admin y es lo que dice si la
+        // duena termino el asistente inicial: se trae aqui para mostrarlo en
+        // cada tarjeta.
+        const extrasPromise = traerExtrasNegocios([
+            'id', 'sitio_web', 'ntfy_topic', 'es_tienda_externa',
+            'archivado', 'romahub_estado', 'romahub_nota_rechazo', 'configurado'
+        ]);
 
         // Para "Salones que necesitan ayuda": sin servicios, sin horarios o con
         // servicios que ningun profesional puede dar => no reciben ni una reserva.
@@ -691,10 +726,16 @@ async function cargarNegocios() {
             index === self.findIndex(t => t.id === item.id)
         );
         
-        const { data: datosUrl, error: errorUrl } = await extrasPromise;
+        const { data: datosUrl, error: errorUrl, faltantes } = await extrasPromise;
         if (errorUrl) {
             console.warn('No se pudieron cargar las URLs de los negocios:', errorUrl);
         } else if (datosUrl) {
+            if (faltantes && faltantes.length) {
+                console.warn(
+                    `Estas columnas no existen en negocios y se ignoraron: ${faltantes.join(', ')}. ` +
+                    'Si falta "archivado", corre sql-archivar-negocios.sql para poder archivar salones.'
+                );
+            }
             const extrasPorId = Object.fromEntries(datosUrl.map(n => [n.id, n]));
             unique = unique.map(n => ({
                 ...n,
@@ -703,7 +744,8 @@ async function cargarNegocios() {
                 es_tienda_externa: extrasPorId[n.id]?.es_tienda_externa === true,
                 archivado: extrasPorId[n.id]?.archivado === true,
                 romahub_estado: extrasPorId[n.id]?.romahub_estado || 'aprobada',
-                romahub_nota_rechazo: extrasPorId[n.id]?.romahub_nota_rechazo || ''
+                romahub_nota_rechazo: extrasPorId[n.id]?.romahub_nota_rechazo || '',
+                configurado: extrasPorId[n.id]?.configurado === true
             }));
         }
 
@@ -1674,6 +1716,63 @@ async function inactivarNegocio(id, nombreNegocio) {
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
+}
+
+// El embudo comercial ocupaba toda la parte de arriba del panel, y mientras se
+// calculaba dejaba un "Calculando embudo…" que empujaba la lista de negocios
+// fuera de la pantalla — en el movil habia que bajar bastante para ver el
+// primer salon. Ahora vive detras de un boton y arranca cerrado: la lista queda
+// arriba y el embudo se abre cuando de verdad se va a usar.
+// La eleccion se recuerda, para quien prefiera tenerlo siempre abierto.
+let embudoAbierto = (() => {
+    try { return localStorage.getItem('embudoAbierto') === 'true'; } catch (e) { return false; }
+})();
+
+function renderEmbudoPlegable() {
+    const filtroComercialActivo = window.hayFiltroComercialActivo
+        ? window.hayFiltroComercialActivo()
+        : false;
+
+    // Si el embudo esta cerrado pero uno de sus filtros sigue aplicado, la lista
+    // se ve recortada sin explicacion y sin forma de volver atras: el boton de
+    // "Ver todos" vive dentro del panel. Por eso el aviso sale igual.
+    const avisoFiltro = (!embudoAbierto && filtroComercialActivo)
+        ? `<span class="text-xs bg-fuchsia-100 text-fuchsia-800 px-3 py-1.5 rounded-full">
+               Filtro del embudo activo
+               <button onclick="limpiarFiltroComercial()" class="underline ml-1 font-semibold">Ver todos</button>
+           </span>`
+        : '';
+
+    return `
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <button onclick="alternarEmbudo()"
+                class="px-4 py-2 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-fuchsia-700 to-purple-700 hover:opacity-90 transition">
+                ${embudoAbierto ? '▲ Ocultar embudo' : '🎯 Ver embudo comercial'}
+            </button>
+            ${avisoFiltro}
+        </div>
+        ${embudoAbierto && window.renderEmbudoComercial ? window.renderEmbudoComercial() : ''}`;
+}
+
+window.alternarEmbudo = function() {
+    embudoAbierto = !embudoAbierto;
+    try { localStorage.setItem('embudoAbierto', String(embudoAbierto)); } catch (e) {}
+    renderHeader();
+};
+
+// Dice de un vistazo si la duena termino el asistente inicial. Es el mismo
+// campo (negocios.configurado) que la app mira para decidir si le muestra el
+// asistente al entrar: si esta en false, la salonera sigue viendo el wizard y
+// todavia no tiene su salon armado.
+//
+// OJO: en las tiendas externas de RomaHub ese mismo campo se usa como "oculta
+// del directorio" (ver ocultarTiendaExterna), asi que ahi no significa wizard y
+// no se muestra la etiqueta.
+function badgeWizard(negocio) {
+    if (negocio.es_tienda_externa === true) return '';
+    return negocio.configurado === true
+        ? '<span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-700 font-medium" title="Terminó el asistente de configuración inicial">✅ Wizard completo</span>'
+        : '<span class="px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800 font-medium" title="Todavía ve el asistente de configuración al entrar">⏳ Wizard sin terminar</span>';
 }
 
 // reiniciar_negocio() devuelve los conteos con el nombre crudo de cada tabla.
@@ -3121,7 +3220,7 @@ function renderHeader() {
             ${renderTiendasPorAprobar()}
             ${renderSeccionRomaHub()}
 
-            ${window.renderEmbudoComercial ? window.renderEmbudoComercial() : ''}
+            ${renderEmbudoPlegable()}
 
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
                 <div class="bg-white p-3 rounded-lg shadow text-center">
@@ -3272,6 +3371,7 @@ function renderListaNegocios(negocios) {
                             <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
                             ${reservasHoy > 0 ? `<span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">📅 +${reservasHoy} hoy</span>` : ''}
                             ${esEliminado ? `<span class="px-2 py-1 rounded-full text-xs bg-pink-100 text-pink-700 font-medium">🗑️ Eliminado</span>` : ''}
+                            ${badgeWizard(n)}
                         </div>
                         <p class="text-sm text-gray-600">📧 ${n.email || 'No registrado'}</p>
                         <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
