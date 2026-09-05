@@ -1676,26 +1676,32 @@ async function inactivarNegocio(id, nombreNegocio) {
     }
 }
 
-const TABLAS_BORRADO_NEGOCIO = [
-    { table: 'lista_espera', column: 'negocio_id', label: 'Lista de espera' },
-    { table: 'push_subscriptions', column: 'negocio_id', label: 'Suscripciones push' },
-    { table: 'clientes_bloqueados', column: 'negocio_id', label: 'Clientes bloqueados' },
-    { table: 'reservas', column: 'negocio_id', label: 'Reservas' },
-    { table: 'clientes_autorizados', column: 'negocio_id', label: 'Clientes autorizados' },
-    { table: 'horarios_profesionales', column: 'negocio_id', label: 'Horarios profesionales' },
-    { table: 'profesionales', column: 'negocio_id', label: 'Profesionales' },
-    { table: 'servicios', column: 'negocio_id', label: 'Servicios' },
-    { table: 'categorias_servicios', column: 'negocio_id', label: 'Categorias de servicios' },
-    { table: 'dias_cerrados', column: 'negocio_id', label: 'Dias cerrados' },
-    { table: 'configuracion', column: 'negocio_id', label: 'Configuracion' },
-    { table: 'suscripciones', column: 'negocio_id', label: 'Suscripciones' },
-    { table: 'roma_finanzas_ingresos', column: 'negocio_id', label: 'RomaFinanzas ingresos' },
-    { table: 'roma_finanzas_gastos', column: 'negocio_id', label: 'RomaFinanzas gastos' },
-    { table: 'roma_finanzas_materials', column: 'negocio_id', label: 'RomaFinanzas materiales' },
-    { table: 'roma_finanzas_services', column: 'negocio_id', label: 'RomaFinanzas servicios' },
-    { table: 'roma_finanzas_fichas_costo', column: 'negocio_id', label: 'RomaFinanzas fichas de costo' },
-    { table: 'roma_finanzas_config', column: 'negocio_id', label: 'RomaFinanzas configuracion' }
-];
+// reiniciar_negocio() devuelve los conteos con el nombre crudo de cada tabla.
+// Este mapa los convierte en el mismo texto que el panel mostraba antes, para
+// que el resumen del reinicio se siga leyendo igual.
+const ETIQUETAS_TABLAS = Object.fromEntries(
+    [
+        ['lista_espera', 'Lista de espera'],
+        ['push_subscriptions', 'Suscripciones push'],
+        ['clientes_bloqueados', 'Clientes bloqueados'],
+        ['reservas', 'Reservas'],
+        ['clientes_autorizados', 'Clientes autorizados'],
+        ['horarios_profesionales', 'Horarios profesionales'],
+        ['profesionales', 'Profesionales'],
+        ['servicios', 'Servicios'],
+        ['categorias_servicios', 'Categorias de servicios'],
+        ['dias_cerrados', 'Dias cerrados'],
+        ['configuracion', 'Configuracion'],
+        ['suscripciones', 'Suscripciones'],
+        ['roma_finanzas_ingresos', 'RomaFinanzas ingresos'],
+        ['roma_finanzas_gastos', 'RomaFinanzas gastos'],
+        ['roma_finanzas_materials', 'RomaFinanzas materiales'],
+        ['roma_finanzas_services', 'RomaFinanzas servicios'],
+        ['roma_finanzas_fichas_costo', 'RomaFinanzas fichas de costo'],
+        ['roma_finanzas_config', 'RomaFinanzas configuracion'],
+    ]
+);
+
 
 function esErrorTablaOColumnaInexistente(error) {
     const code = error?.code;
@@ -1706,33 +1712,9 @@ function esErrorTablaOColumnaInexistente(error) {
         || message.includes('schema cache');
 }
 
-async function borrarRegistrosPorNegocio({ table, column, label }, negocioId) {
-    try {
-        const { error, count } = await window.supabase
-            .from(table)
-            .delete({ count: 'exact' })
-            .eq(column, negocioId);
-
-        if (error) {
-            if (esErrorTablaOColumnaInexistente(error)) {
-                return { table, label, status: 'omitida', detail: error.message };
-            }
-            return { table, label, status: 'error', detail: error.message };
-        }
-
-        return { table, label, status: 'ok', count: count || 0 };
-    } catch (error) {
-        return { table, label, status: 'error', detail: error.message };
-    }
-}
-
-async function borrarDatosRelacionadosNegocio(id) {
-    const resultados = [];
-    for (const tabla of TABLAS_BORRADO_NEGOCIO) {
-        resultados.push(await borrarRegistrosPorNegocio(tabla, id));
-    }
-    return resultados;
-}
+// El borrado tabla por tabla desde el navegador vivia aqui. Lo hace ahora
+// reiniciar_negocio() dentro de la base (sql-reiniciar-negocio.sql), que es la
+// unica forma de tocar las tablas de RomaFinanzas sin abrirlas al publico.
 
 // Archivar es lo contrario de "Borrar Supabase": no toca ni una fila de datos,
 // solo saca el negocio de la lista. Para las duenas que se quedaron a medias y
@@ -1786,34 +1768,35 @@ async function borrarNegocioCompleto(id, nombreNegocio) {
     }
 
     try {
-        const resultados = await borrarDatosRelacionadosNegocio(id);
+        // Misma funcion que el reinicio, pero pidiendole que borre tambien la
+        // ficha del negocio. Antes esto se hacia tabla por tabla y las de
+        // RomaFinanzas siempre daban "permission denied": el borrado se
+        // abortaba a mitad de camino y el salon quedaba vaciado pero presente.
+        // Dentro de la funcion todo ocurre de una sola vez y la ficha se
+        // elimina al final, cuando ya no queda nada que quede huerfano.
+        const { data: conteos, error } = await window.supabase
+            .rpc('reiniciar_negocio', { p_negocio_id: id, p_borrar_negocio: true });
 
-        const errores = resultados.filter(resultado => resultado.status === 'error');
-        if (errores.length > 0) {
-            const detalleErrores = errores
-                .slice(0, 10)
-                .map(resultado => `${resultado.label}: ${resultado.detail}`)
-                .join('\n');
+        if (error) {
+            const faltaLaFuncion = error.code === 'PGRST202'
+                || /could not find the function|does not exist/i.test(error.message || '');
             alert(
-                'No se completo el borrado.\n\n' +
-                'Supabase bloqueo una o mas tablas. No se borro el negocio principal para evitar dejar datos huerfanos.\n\n' +
-                detalleErrores
+                faltaLaFuncion
+                    ? 'No se completo el borrado.\n\n' +
+                      'Falta crear la funcion en Supabase: ejecuta una vez el archivo ' +
+                      'sql-reiniciar-negocio.sql en el SQL Editor.'
+                    : 'No se completo el borrado.\n\n' + error.message
             );
             return;
         }
 
-        const resultadoNegocio = await borrarRegistrosPorNegocio(
-            { table: 'negocios', column: 'id', label: 'Negocio principal' },
-            id
-        );
-
-        if (resultadoNegocio.status === 'error') {
-            alert(
-                'Se borraron los datos relacionados, pero no se pudo borrar el negocio principal.\n\n' +
-                `${resultadoNegocio.detail}`
-            );
-            return;
-        }
+        const resultados = Object.entries(conteos || {})
+            .filter(([, valor]) => typeof valor === 'number' && valor > 0)
+            .map(([tabla, valor]) => ({
+                label: ETIQUETAS_TABLAS[tabla] || tabla,
+                count: valor,
+                status: 'ok'
+            }));
 
         limpiarEstadoLocalNegocio(id);
 
@@ -1846,38 +1829,33 @@ async function reiniciarNegocioCompleto(id, nombreNegocio) {
     }
 
     try {
-        const resultados = await borrarDatosRelacionadosNegocio(id);
+        // El borrado ocurre dentro de la base, en reiniciar_negocio() (ver
+        // sql-reiniciar-negocio.sql). Antes se hacia tabla por tabla desde
+        // aqui y las de RomaFinanzas fallaban siempre con "permission denied":
+        // guardan la contabilidad de cada salon y estan cerradas a proposito.
+        // Abrirlas para que el boton funcionara habria dejado esa contabilidad
+        // al alcance de cualquiera con la clave publica; la funcion, en cambio,
+        // solo sabe hacer esta operacion y solo la pueden llamar las cuentas
+        // que entran al SuperAdmin.
+        const { data: conteos, error } = await window.supabase
+            .rpc('reiniciar_negocio', { p_negocio_id: id });
 
-        const errores = resultados.filter(resultado => resultado.status === 'error');
-        if (errores.length > 0) {
-            const detalleErrores = errores
-                .slice(0, 10)
-                .map(resultado => `${resultado.label}: ${resultado.detail}`)
-                .join('\n');
+        if (error) {
+            const faltaLaFuncion = error.code === 'PGRST202'
+                || /could not find the function|does not exist/i.test(error.message || '');
             alert(
-                'No se completo el reinicio.\n\n' +
-                'Supabase bloqueo una o mas tablas.\n\n' +
-                detalleErrores
+                faltaLaFuncion
+                    ? 'No se completo el reinicio.\n\n' +
+                      'Falta crear la funcion en Supabase: ejecuta una vez el archivo ' +
+                      'sql-reiniciar-negocio.sql en el SQL Editor.'
+                    : 'No se completo el reinicio.\n\n' + error.message
             );
             return;
         }
 
-        const { error: errorConfigurado } = await window.supabase
-            .from('negocios')
-            .update({ configurado: false })
-            .eq('id', id);
-
-        if (errorConfigurado) {
-            alert(
-                'Se borraron los datos, pero no se pudo marcar el negocio como no configurado.\n\n' +
-                errorConfigurado.message
-            );
-            return;
-        }
-
-        const resumen = resultados
-            .filter(resultado => resultado.status === 'ok' && resultado.count > 0)
-            .map(resultado => `${resultado.label}: ${resultado.count}`)
+        const resumen = Object.entries(conteos || {})
+            .filter(([, valor]) => typeof valor === 'number' && valor > 0)
+            .map(([tabla, valor]) => `${ETIQUETAS_TABLAS[tabla] || tabla}: ${valor}`)
             .join('\n') || 'No habia registros relacionados.';
 
         alert(`Negocio reiniciado.\n\nAl volver a entrar vera el asistente de configuracion inicial.\n\n${resumen}`);
