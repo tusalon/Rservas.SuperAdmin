@@ -512,6 +512,7 @@ let reservasDiarias = 0;
 let reservasDiariasData = [];
 let reportesTiendaData = [];
 let tiendasPorAprobarData = [];
+let ticketsSoporteData = [];
 let reservasSemanaData = [];
 let ultimaCitaPorNegocio = {};
 let actividadReservasCargada = false;
@@ -3151,6 +3152,148 @@ function renderSeccionRomaHub() {
     `;
 }
 
+// ==================== SOPORTE (tickets del boton de las apps) ====================
+// El boton de soporte de las apps guarda el ticket ANTES de abrir WhatsApp
+// (rservasroma/utils/soporte.js). Asi que aqui esta TODO lo que la gente
+// intento decir, incluido lo que nunca llego a enviarse por el chat: ese es el
+// motivo de que exista esta seccion y no baste con mirar WhatsApp.
+//
+// La foto NO esta aqui: viaja adjunta en el WhatsApp. "con_foto" avisa de que
+// hay que abrir el chat para verla.
+async function cargarTicketsSoporte() {
+    try {
+        const { data, error } = await window.supabase
+            .from('soporte_tickets')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(200);
+        if (error) {
+            if (esErrorTablaOColumnaInexistente(error)) {
+                console.warn('soporte_tickets todavia no existe: corre rservasroma/sql-soporte-tickets.sql');
+            } else {
+                console.warn('No se pudieron cargar los tickets de soporte:', error.message);
+            }
+            return [];
+        }
+        return data || [];
+    } catch (error) {
+        console.warn('Error cargando tickets de soporte:', error);
+        return [];
+    }
+}
+
+let soporteAbierto = (() => {
+    try { return localStorage.getItem('soporteAbierto') === 'true'; } catch (e) { return false; }
+})();
+
+window.alternarSoporte = function() {
+    soporteAbierto = !soporteAbierto;
+    try { localStorage.setItem('soporteAbierto', String(soporteAbierto)); } catch (e) {}
+    renderHeader();
+};
+
+function fechaSoporte(iso) {
+    if (!iso) return '';
+    const fecha = new Date(iso);
+    if (Number.isNaN(fecha.getTime())) return '';
+    const minutos = Math.floor((Date.now() - fecha.getTime()) / 60000);
+    if (minutos < 1) return 'ahora mismo';
+    if (minutos < 60) return `hace ${minutos} min`;
+    if (minutos < 1440) return `hace ${Math.floor(minutos / 60)} h`;
+    return fecha.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+async function marcarTicketSoporte(id, estado) {
+    try {
+        const cambios = { estado };
+        if (estado !== 'nuevo') cambios.atendido_at = new Date().toISOString();
+        const { error } = await window.supabase.from('soporte_tickets').update(cambios).eq('id', id);
+        if (error) throw error;
+        ticketsSoporteData = ticketsSoporteData.map(t => (t.id === id ? { ...t, ...cambios } : t));
+        renderHeader();
+    } catch (error) {
+        alert('No se pudo actualizar el ticket: ' + error.message);
+    }
+}
+
+// Responder abre el WhatsApp de quien escribio y, de paso, deja el ticket como
+// leido: si no, un ticket ya contestado sigue pidiendo atencion en el panel.
+function responderTicketSoporte(id) {
+    const ticket = ticketsSoporteData.find(t => String(t.id) === String(id));
+    if (!ticket) return;
+    if (!ticket.contacto) {
+        alert('Este ticket no trae telefono de contacto. Busca el negocio en la lista de abajo y escribele desde su tarjeta.');
+        return;
+    }
+    const numero = normalizarTelefonoWhatsApp(ticket.contacto, codigoPaisDeNegocio(ticket.negocio_id));
+    const saludo = `Hola, te escribimos desde el soporte de RservasRoma por tu mensaje: "${String(ticket.mensaje || '').slice(0, 120)}"`;
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(saludo)}`, '_blank');
+    if (ticket.estado === 'nuevo') marcarTicketSoporte(id, 'leido');
+}
+
+function tarjetaTicketSoporte(ticket) {
+    const esNuevo = ticket.estado === 'nuevo';
+    const resuelto = ticket.estado === 'resuelto';
+    const etiquetaOrigen = ticket.origen === 'clientas'
+        ? '<span class="px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 text-[10px] font-bold">Clienta</span>'
+        : '<span class="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-bold">Dueña</span>';
+
+    return `
+        <div class="border ${esNuevo ? 'border-rose-300 bg-rose-50/60' : 'border-gray-200 bg-white'} rounded-xl p-3 mb-2 last:mb-0">
+            <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                ${esNuevo ? '<span class="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-bold">NUEVO</span>' : ''}
+                ${resuelto ? '<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">Resuelto</span>' : ''}
+                ${etiquetaOrigen}
+                ${ticket.con_foto ? '<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">📷 Con foto en el chat</span>' : ''}
+                <span class="text-[11px] text-gray-500">${escapeHtml(fechaSoporte(ticket.created_at))}</span>
+            </div>
+            <p class="text-sm font-bold text-gray-800">${escapeHtml(ticket.negocio_nombre || '(sin negocio)')}
+                <span class="font-normal text-xs text-gray-500">${escapeHtml(ticket.negocio_slug || '')}</span>
+            </p>
+            <p class="text-[11px] text-gray-500 mb-1.5">${escapeHtml(ticket.quien || '')}${ticket.contacto ? ' · ' + escapeHtml(ticket.contacto) : ' · sin teléfono'}${ticket.plataforma ? ' · ' + escapeHtml(ticket.plataforma) : ''}</p>
+            <p class="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(ticket.mensaje || '')}</p>
+            <div class="flex flex-wrap gap-1.5 mt-2.5">
+                <button onclick="responderTicketSoporte('${ticket.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">💬 Responder</button>
+                ${resuelto
+                    ? `<button onclick="marcarTicketSoporte('${ticket.id}', 'leido')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold">Reabrir</button>`
+                    : `<button onclick="marcarTicketSoporte('${ticket.id}', 'resuelto')" class="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-bold">Resuelto</button>`}
+            </div>
+        </div>
+    `;
+}
+
+function renderSeccionSoporte() {
+    if (!ticketsSoporteData.length) return '';
+
+    const pendientes = ticketsSoporteData.filter(t => t.estado !== 'resuelto');
+    const nuevos = ticketsSoporteData.filter(t => t.estado === 'nuevo');
+    // Con pendientes se abre sola: un ticket sin leer no puede depender de que
+    // uno se acuerde de pulsar un boton.
+    const abierto = soporteAbierto || pendientes.length > 0;
+    const listado = abierto
+        ? (pendientes.length ? pendientes : ticketsSoporteData.slice(0, 10)).map(tarjetaTicketSoporte).join('')
+        : '';
+
+    const cabecera = pendientes.length
+        ? `<span class="font-bold text-rose-800 text-sm">🆘 Soporte: ${pendientes.length} sin resolver${nuevos.length ? ` (${nuevos.length} sin leer)` : ''}</span>`
+        : '<span class="font-bold text-gray-700 text-sm">🆘 Soporte: todo resuelto</span>';
+
+    return `
+        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden border-2 ${pendientes.length ? 'border-rose-300' : 'border-gray-200'}">
+            <div class="${pendientes.length ? 'bg-rose-50' : 'bg-gray-50'} px-4 py-2.5 border-b ${pendientes.length ? 'border-rose-100' : 'border-gray-100'} flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    ${cabecera}
+                    <p class="text-xs ${pendientes.length ? 'text-rose-700' : 'text-gray-500'} mt-0.5">Mensajes del botón de soporte de las apps. Quedan aquí aunque el WhatsApp no llegue a enviarse.</p>
+                </div>
+                ${pendientes.length
+                    ? ''
+                    : `<button onclick="alternarSoporte()" class="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-bold">${soporteAbierto ? 'Ocultar' : 'Ver últimos'}</button>`}
+            </div>
+            ${listado ? `<div class="px-4 py-3">${listado}</div>` : ''}
+        </div>
+    `;
+}
+
 function renderHeader() {
     // Las tiendas RomaHub tienen su propio conteo en renderTiendasPorAprobar/
     // renderSeccionRomaHub: aqui solo entran negocios de RservasRoma, para que
@@ -3217,6 +3360,7 @@ function renderHeader() {
                 </div>
             </div>
 
+            ${renderSeccionSoporte()}
             ${renderTiendasPorAprobar()}
             ${renderSeccionRomaHub()}
 
@@ -3853,6 +3997,8 @@ window.borrarNegocioCompleto = borrarNegocioCompleto;
 window.reiniciarNegocioCompleto = reiniciarNegocioCompleto;
 window.abrirModalCambiarPassword = abrirModalCambiarPassword;
 window.alternarArchivadoNegocio = alternarArchivadoNegocio;
+window.marcarTicketSoporte = marcarTicketSoporte;
+window.responderTicketSoporte = responderTicketSoporte;
 window.guardarPasswordNegocio = guardarPasswordNegocio;
 window.enviarWhatsApp = enviarWhatsApp;
 window.enviarWhatsAppSimple = enviarWhatsAppSimple;  
@@ -4110,6 +4256,10 @@ async function init() {
     });
     cargarTiendasPorAprobar().then(tiendas => {
         tiendasPorAprobarData = tiendas;
+        renderHeader();
+    });
+    cargarTicketsSoporte().then(tickets => {
+        ticketsSoporteData = tickets;
         renderHeader();
     });
 }
