@@ -3,100 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Admin Login - Rservas</title>
+    <title>Entrar · SuperAdmin RservasRoma</title>
+    <meta name="theme-color" content="#6d28d9">
     <!-- Estilos ya generados (tools/tailwind/tailwind.config.js): el CDN de Tailwind
          bajaba un compilador y generaba los estilos en el telefono en cada apertura. -->
-    <link rel="stylesheet" href="vendor/tailwind.css?v=20260928-1">
+    <link rel="stylesheet" href="vendor/tailwind.css?v=20260928-vista1">
     <!-- Version fija y con integrity: este panel puede borrar salones, no debe cargar
          codigo que cambie solo. Para actualizar: nueva version + nuevo hash sha384. -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
     <style>
-        .backdrop-blur-lg {
-            backdrop-filter: blur(16px);
-        }
+        :root { color-scheme: light; accent-color: #6d28d9; }
+        ::selection { background: #ede9fe; color: #3b0764; }
+        :focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
     </style>
 </head>
-<body class="bg-gradient-to-br from-pink-900 to-purple-900 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white/10 backdrop-blur-lg rounded-xl p-8 max-w-md w-full border border-pink-500/30 shadow-2xl">
-        <div class="text-center mb-8">
-            <div class="text-6xl mb-3">👑</div>
-            <h1 class="text-3xl font-bold text-white">Super Admin</h1>
-            <p class="text-pink-300 mt-2">Panel de control Rservas</p>
-        </div>
+<body class="bg-gray-50 text-gray-900 antialiased min-h-screen flex items-center justify-center p-4">
+    <main class="w-full max-w-sm">
+        <h1 class="text-xl font-semibold text-gray-900">SuperAdmin RservasRoma</h1>
+        <p class="mt-1 text-sm text-gray-600">Entra con la cuenta de administración.</p>
 
-        <div id="mensajeCargando" class="mb-4 text-sm text-center text-pink-300 hidden"></div>
-        
-        <form id="loginForm" class="space-y-6">
+        <form id="loginForm" class="mt-6 bg-white border border-gray-200 rounded-lg p-5 space-y-4" novalidate>
             <div>
-                <label class="block text-sm font-medium text-pink-300 mb-2">Email</label>
-                <input type="email" id="email" required
-                       class="w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-600 text-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition"
-                       placeholder="admin@rservas.com">
+                <label for="email" class="block text-sm font-medium text-gray-800 mb-1">Email</label>
+                <input type="email" id="email" required autocomplete="username" inputmode="email"
+                       class="w-full rounded-md border border-gray-300 bg-white px-3 min-h-11 text-base text-gray-900 focus:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-200">
             </div>
-            
+
             <div>
-                <label class="block text-sm font-medium text-pink-300 mb-2">Contraseña</label>
-                <input type="password" id="password" required
-                       class="w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-600 text-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition"
-                       placeholder="••••••••">
+                <label for="password" class="block text-sm font-medium text-gray-800 mb-1">Contraseña</label>
+                <input type="password" id="password" required autocomplete="current-password"
+                       class="w-full rounded-md border border-gray-300 bg-white px-3 min-h-11 text-base text-gray-900 focus:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-200">
             </div>
-            
-            <button type="submit" 
-                    class="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-pink-700 hover:to-purple-700 transition transform hover:scale-105">
-                Entrar al Panel
+
+            <p id="errorMsg" role="alert" class="text-sm text-red-700 hidden"></p>
+            <p id="mensajeCargando" role="status" class="text-sm text-gray-600 hidden"></p>
+
+            <button type="submit" id="entrar"
+                    class="w-full inline-flex items-center justify-center rounded-md bg-purple-700 px-4 min-h-11 text-sm font-medium text-white hover:bg-purple-800 disabled:opacity-50 disabled:cursor-wait">
+                Entrar
             </button>
         </form>
-        
-        <div id="errorMsg" class="mt-4 text-red-400 text-sm text-center hidden"></div>
-    </div>
+    </main>
 
-    <script src="supabase-config.js"></script>
+    <script src="supabase-config.js?v=20260927-seguridad1"></script>
     <script>
         const ADMIN_EMAIL = "rservasroma@gmail.com";
-        
+
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value.trim();
+
+            const email = document.getElementById('email').value.trim().toLowerCase();
+            // La contrasena va tal cual: recortar espacios la cambiaria.
+            const password = document.getElementById('password').value;
             const errorMsg = document.getElementById('errorMsg');
             const mensajeCargando = document.getElementById('mensajeCargando');
-            
-            errorMsg.classList.add('hidden');
-            
-            mensajeCargando.textContent = '🔐 Verificando acceso...';
-            mensajeCargando.classList.remove('hidden');
-            
-            try {
-                const { data, error } = await window.supabase.auth.signInWithPassword({
-                    email: email,
-                    password: password
-                });
+            const boton = document.getElementById('entrar');
 
+            errorMsg.classList.add('hidden');
+            if (!email || !password) {
+                errorMsg.textContent = 'Escribe tu email y tu contraseña.';
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            mensajeCargando.textContent = 'Comprobando…';
+            mensajeCargando.classList.remove('hidden');
+            boton.disabled = true;
+
+            try {
+                const { data, error } = await window.supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
 
-                // Verificar que sea el super admin
+                // Solo es comodidad: la proteccion real esta en la base (RLS y
+                // funciones que comprueban este mismo email).
                 if (email !== ADMIN_EMAIL) {
                     await window.supabase.auth.signOut();
-                    throw new Error('No tienes permisos de super administrador');
+                    throw new Error('Esta cuenta no tiene acceso al SuperAdmin.');
                 }
+                if (!data.user) throw new Error('No se encontró el usuario.');
 
-                if (!data.user) throw new Error('Usuario no encontrado');
-
-                console.log('✅ Login exitoso');
-                mensajeCargando.textContent = '✅ Redirigiendo...';
-                
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 500);
-                
+                mensajeCargando.textContent = 'Entrando…';
+                window.location.href = 'index.html';
             } catch (error) {
-                errorMsg.textContent = error.message || 'Error al iniciar sesión';
+                const mensaje = /invalid login credentials/i.test(error.message || '')
+                    ? 'El email o la contraseña no coinciden.'
+                    : (error.message || 'No se pudo entrar. Inténtalo de nuevo.');
+                errorMsg.textContent = mensaje;
                 errorMsg.classList.remove('hidden');
                 mensajeCargando.classList.add('hidden');
-                
-                // Limpiar campos si hay error
+                boton.disabled = false;
                 document.getElementById('password').value = '';
+                document.getElementById('password').focus();
             }
         });
     </script>

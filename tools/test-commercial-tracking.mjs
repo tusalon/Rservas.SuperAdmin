@@ -87,7 +87,7 @@ assert.deepEqual(context.aplicarFiltroComercial(businesses).map(item => item.id)
 
 const ordered = context.ordenarPorPrioridadComercial(businesses).map(item => item.id);
 assert.equal(ordered[0], 'paying-risk');
-assert.match(context.renderEmbudoComercial(), /Embudo comercial RservasRoma/);
+assert.match(context.renderEmbudoComercial(), /Cierre ahora/);
 
 // Mismo caso, pero con las filas que devuelve admin_actividad_negocios
 // (sql-admin-actividad-negocios.sql): tiene que dar exactamente lo mismo.

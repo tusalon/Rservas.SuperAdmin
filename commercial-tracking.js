@@ -5,6 +5,9 @@
 const COMMERCIAL_LOCAL_KEY = 'seguimiento_comercial_rservas_v1';
 const COMMERCIAL_TABLE = 'seguimiento_comercial_negocios';
 const COMMERCIAL_DAY_MS = 24 * 60 * 60 * 1000;
+const COMMERCIAL_BTN = 'inline-flex items-center justify-center rounded-md px-3 min-h-11 md:min-h-9 text-sm font-medium whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600';
+const COMMERCIAL_BTN_PRI = `${COMMERCIAL_BTN} bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-50`;
+const COMMERCIAL_BTN_SEC = `${COMMERCIAL_BTN} bg-white text-gray-800 border border-gray-300 hover:bg-gray-50`;
 
 const commercialState = {
     loading: true,
@@ -341,27 +344,27 @@ function commercialFormatDate(value, withTime = false) {
 }
 
 function commercialSegmentClasses(segment) {
-    if (segment === 'Activa') return 'bg-emerald-100 text-emerald-800';
-    if (segment === 'En riesgo') return 'bg-amber-100 text-amber-800';
-    if (segment === 'Dormida') return 'bg-red-100 text-red-800';
-    if (segment === 'Configuración incompleta') return 'bg-orange-100 text-orange-800';
-    return 'bg-gray-200 text-gray-700';
+    if (segment === 'Activa') return 'bg-green-50 text-green-800 ring-green-200';
+    if (segment === 'En riesgo') return 'bg-amber-50 text-amber-900 ring-amber-200';
+    if (segment === 'Dormida') return 'bg-red-50 text-red-800 ring-red-200';
+    if (segment === 'Configuración incompleta') return 'bg-amber-50 text-amber-900 ring-amber-200';
+    return 'bg-gray-100 text-gray-700 ring-gray-200';
 }
 
 function commercialPriorityClasses(priority) {
-    if (priority === 'P0') return 'bg-red-600 text-white';
-    if (priority === 'P1') return 'bg-fuchsia-600 text-white';
-    if (priority === 'P2') return 'bg-amber-500 text-white';
-    if (priority === 'P3') return 'bg-blue-100 text-blue-800';
-    return 'bg-gray-200 text-gray-700';
+    if (priority === 'P0') return 'bg-red-700 text-white ring-red-700';
+    if (priority === 'P1') return 'bg-purple-700 text-white ring-purple-700';
+    if (priority === 'P2') return 'bg-amber-50 text-amber-900 ring-amber-200';
+    if (priority === 'P3') return 'bg-gray-100 text-gray-800 ring-gray-200';
+    return 'bg-gray-100 text-gray-700 ring-gray-200';
 }
 
 function renderEmbudoComercial() {
     if (commercialState.loading) {
-        return `<div class="mb-6 bg-white rounded-xl shadow p-4 text-sm text-gray-500">🎯 Calculando embudo comercial y actividad por negocio…</div>`;
+        return '<p class="py-2 text-sm text-gray-600" role="status">Calculando el embudo y la actividad de cada salón…</p>';
     }
     if (!commercialState.ready) {
-        return `<div class="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">No se pudo calcular el embudo comercial. ${commercialEscape(commercialState.loadError)}</div>`;
+        return `<p role="alert" class="py-2 text-sm text-red-800">No se pudo calcular el embudo comercial. ${commercialEscape(commercialState.loadError)}</p>`;
     }
     const businesses = (negociosData || []).filter(n => {
         const item = obtenerAuditoriaComercial(n.id);
@@ -378,34 +381,29 @@ function renderEmbudoComercial() {
         paidThisCycle: count((item, tracking) => tracking.estado === 'pago_confirmado'),
     };
     const persistenceLabel = commercialState.persistence === 'supabase'
-        ? '<span class="text-emerald-700">☁️ Seguimiento sincronizado en Supabase</span>'
-        : '<span class="text-amber-700">💾 Seguimiento guardado en este dispositivo; falta ejecutar el SQL incluido</span>';
-    const card = (filter, value, title, subtitle, classes) => `
-        <button onclick="filtrarComercial('${filter}')" class="text-left rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-md ${classes}">
-            <div class="text-2xl font-black">${value}</div>
-            <div class="text-sm font-bold mt-0.5">${title}</div>
-            <div class="text-xs opacity-80 mt-1">${subtitle}</div>
+        ? 'El seguimiento se guarda en Supabase y se ve igual en todos tus dispositivos.'
+        : 'El seguimiento se guarda solo en este dispositivo: falta ejecutar el SQL de seguimiento comercial.';
+    const card = (filter, value, title, subtitle) => {
+        const activo = commercialState.filter === filter;
+        return `
+        <button type="button" onclick="filtrarComercial('${filter}')" aria-pressed="${activo}"
+            class="text-left rounded-md border p-3 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 ${activo ? 'border-purple-600 bg-purple-50' : 'border-gray-200 bg-white hover:border-gray-400'}">
+            <div class="text-xl font-semibold text-gray-900 tabular-nums">${value}</div>
+            <div class="text-sm font-medium text-gray-900 mt-0.5">${title}</div>
+            <div class="text-xs text-gray-600 mt-0.5">${subtitle}</div>
         </button>`;
+    };
     return `
-        <section class="mb-6 bg-white rounded-2xl shadow overflow-hidden border border-fuchsia-100">
-            <div class="bg-gradient-to-r from-fuchsia-700 to-purple-700 px-4 py-3 text-white flex flex-wrap items-center justify-between gap-2">
-                <div>
-                    <h2 class="font-black">🎯 Embudo comercial RservasRoma</h2>
-                    <p class="text-xs text-fuchsia-100">Prioriza retención, cierre y activación; no contactes la base completa con el mismo mensaje.</p>
-                </div>
-                <div class="text-xs bg-white/15 px-3 py-1.5 rounded-full">${persistenceLabel}</div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 p-3">
-                ${card('retencion', metrics.retention, 'P0 Retención', 'Pagan y están en riesgo', 'bg-red-50 border-red-200 text-red-800')}
-                ${card('cierre_ahora', metrics.closeNow, 'Cierre ahora', 'Activos, citas futuras, sin pago', 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-800')}
-                ${card('activos_sin_pago', metrics.activeUnpaid, 'Activos sin pago', 'Ya experimentaron valor', 'bg-purple-50 border-purple-200 text-purple-800')}
-                ${card('riesgo_sin_pago', metrics.riskUnpaid, 'En riesgo', 'Prevenir abandono', 'bg-amber-50 border-amber-200 text-amber-800')}
-                ${card('activacion_rapida', metrics.quickActivation, 'Activación rápida', 'Solo horario o servicio', 'bg-orange-50 border-orange-200 text-orange-800')}
-                ${card('dormidos_historial', metrics.dormantHistory, 'Recuperación', 'Dormidos con historial', 'bg-gray-50 border-gray-200 text-gray-800')}
-                ${card('pago_confirmado', metrics.paidThisCycle, 'Ventas marcadas', 'Pago confirmado en seguimiento', 'bg-emerald-50 border-emerald-200 text-emerald-800')}
-            </div>
-            ${commercialState.filter !== 'todos' ? `<div class="px-4 pb-3 text-xs flex items-center gap-2"><span class="font-bold text-fuchsia-700">Filtro comercial activo</span><button onclick="limpiarFiltroComercial()" class="underline text-gray-600">Ver todos</button></div>` : ''}
-        </section>`;
+        <p class="py-2 text-sm text-gray-600">Toca un grupo para ver solo esos salones en la lista. No escribas a toda la base con el mismo mensaje. ${persistenceLabel}</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 pb-2">
+            ${card('retencion', metrics.retention, 'Retención', 'Pagan y están en riesgo')}
+            ${card('cierre_ahora', metrics.closeNow, 'Cierre ahora', 'Usan la agenda y no pagan')}
+            ${card('activos_sin_pago', metrics.activeUnpaid, 'Activos sin pago', 'Ya vieron el valor')}
+            ${card('riesgo_sin_pago', metrics.riskUnpaid, 'En riesgo', 'Prevenir el abandono')}
+            ${card('activacion_rapida', metrics.quickActivation, 'Activación rápida', 'Solo falta horario o servicio')}
+            ${card('dormidos_historial', metrics.dormantHistory, 'Recuperación', 'Dormidos con historial')}
+            ${card('pago_confirmado', metrics.paidThisCycle, 'Ventas marcadas', 'Pago confirmado en seguimiento')}
+        </div>`;
 }
 
 function commercialMatchesFilter(business, filter = commercialState.filter) {
@@ -468,30 +466,31 @@ function renderFichaComercial(business) {
     const priority = tracking.prioridad_manual || item.priority;
     const statusLabel = COMMERCIAL_STATUS_LABELS[tracking.estado] || 'Sin contactar';
     const configuration = item.operational
-        ? 'Operativa'
+        ? 'Lista para reservar'
         : `${item.professionalCount} prof. · ${item.serviceCount} servicios · ${item.scheduleCount} horarios`;
+    const chipComercial = (texto, clases) => `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${clases}">${texto}</span>`;
     const nextFollowUp = tracking.proximo_seguimiento
-        ? `<span class="font-semibold text-fuchsia-700">Próximo seguimiento: ${commercialFormatDate(tracking.proximo_seguimiento)}</span>`
-        : '<span class="text-gray-400">Sin próxima fecha</span>';
+        ? `<span class="font-medium text-purple-800">Próximo seguimiento: ${commercialFormatDate(tracking.proximo_seguimiento)}</span>`
+        : '<span class="text-gray-600">Sin próxima fecha</span>';
     return `
-        <div class="mt-3 rounded-xl border border-fuchsia-100 bg-fuchsia-50/40 p-3">
+        <div class="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex flex-wrap gap-1.5 items-center">
-                    <span class="px-2 py-1 rounded-full text-xs font-bold ${commercialPriorityClasses(priority)}">${priority}</span>
-                    <span class="px-2 py-1 rounded-full text-xs font-bold ${commercialSegmentClasses(item.segment)}">${commercialEscape(item.segment)}</span>
-                    <span class="px-2 py-1 rounded-full text-xs bg-white border text-gray-700">${commercialEscape(statusLabel)}</span>
+                    ${chipComercial(priority, commercialPriorityClasses(priority))}
+                    ${chipComercial(commercialEscape(item.segment), commercialSegmentClasses(item.segment))}
+                    ${chipComercial(commercialEscape(statusLabel), 'bg-white text-gray-800 ring-gray-300')}
                 </div>
-                <button onclick="abrirSeguimientoComercial('${commercialEscape(business.id)}')" class="bg-fuchsia-700 hover:bg-fuchsia-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Editar seguimiento</button>
+                <button type="button" onclick="abrirSeguimientoComercial('${commercialEscape(business.id)}')" class="${COMMERCIAL_BTN_SEC}">Seguimiento</button>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3 text-xs">
-                <div><span class="text-gray-500 block">Configuración</span><strong>${commercialEscape(configuration)}</strong></div>
-                <div><span class="text-gray-500 block">Última actividad</span><strong>${commercialFormatDate(item.lastActivity, true)}</strong></div>
-                <div><span class="text-gray-500 block">Última cita</span><strong>${commercialFormatDate(item.lastPastAppointment)}</strong></div>
-                <div><span class="text-gray-500 block">Próxima cita</span><strong>${commercialFormatDate(item.nextAppointment)}</strong></div>
-                <div><span class="text-gray-500 block">Reservas históricas</span><strong>${item.total || 0}</strong></div>
-            </div>
-            <div class="mt-2 text-xs text-gray-700"><strong>Diagnóstico:</strong> ${commercialEscape(item.diagnosis)} · <strong>Acción:</strong> ${commercialEscape(item.action)}</div>
-            <div class="mt-2 text-xs">${nextFollowUp}${tracking.responsable ? ` · Responsable: <strong>${commercialEscape(tracking.responsable)}</strong>` : ''}</div>
+            <dl class="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-2 mt-3 text-sm">
+                <div><dt class="text-xs text-gray-600">Configuración</dt><dd class="font-medium text-gray-900">${commercialEscape(configuration)}</dd></div>
+                <div><dt class="text-xs text-gray-600">Última actividad</dt><dd class="font-medium text-gray-900">${commercialFormatDate(item.lastActivity, true)}</dd></div>
+                <div><dt class="text-xs text-gray-600">Última cita</dt><dd class="font-medium text-gray-900">${commercialFormatDate(item.lastPastAppointment)}</dd></div>
+                <div><dt class="text-xs text-gray-600">Próxima cita</dt><dd class="font-medium text-gray-900">${commercialFormatDate(item.nextAppointment)}</dd></div>
+                <div><dt class="text-xs text-gray-600">Citas en total</dt><dd class="font-medium text-gray-900 tabular-nums">${item.total || 0}</dd></div>
+            </dl>
+            <p class="mt-2 text-sm text-gray-800"><span class="font-medium">Diagnóstico:</span> ${commercialEscape(item.diagnosis)} · <span class="font-medium">Qué hacer:</span> ${commercialEscape(item.action)}</p>
+            <p class="mt-1 text-sm">${nextFollowUp}${tracking.responsable ? ` · Responsable: <span class="font-medium">${commercialEscape(tracking.responsable)}</span>` : ''}</p>
         </div>`;
 }
 
@@ -509,10 +508,10 @@ function abrirSeguimientoComercial(negocioId) {
     modal.id = 'modal-seguimiento-comercial';
     modal.className = 'fixed inset-0 z-50 bg-black/50 p-3 flex items-center justify-center';
     modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[94vh] overflow-y-auto">
-            <div class="sticky top-0 bg-gradient-to-r from-fuchsia-700 to-purple-700 text-white px-5 py-4 flex items-start justify-between gap-3">
-                <div><p class="text-xs text-fuchsia-100">Seguimiento comercial</p><h3 class="text-xl font-black">${commercialEscape(business.nombre || negocioId)}</h3></div>
-                <button onclick="cerrarSeguimientoComercial()" class="text-2xl leading-none">×</button>
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[94vh] overflow-y-auto">
+            <div class="sticky top-0 bg-white border-b border-gray-200 px-5 py-3 flex items-start justify-between gap-3">
+                <div><p class="text-sm text-gray-600">Seguimiento comercial</p><h3 class="text-lg font-semibold text-gray-900 break-words">${commercialEscape(business.nombre || negocioId)}</h3></div>
+                <button type="button" onclick="cerrarSeguimientoComercial()" aria-label="Cerrar" class="-mr-2 inline-flex items-center justify-center w-11 h-11 md:w-9 md:h-9 rounded-md text-gray-600 hover:bg-gray-100 text-2xl leading-none">&times;</button>
             </div>
             <div class="p-5">
                 <div class="grid md:grid-cols-3 gap-2 mb-5 text-sm">
@@ -547,12 +546,13 @@ function abrirSeguimientoComercial(negocioId) {
                     </label>
                 </div>
                 <div class="mt-5 flex flex-col-reverse sm:flex-row justify-end gap-2">
-                    <button onclick="cerrarSeguimientoComercial()" class="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 font-semibold">Cancelar</button>
-                    <button id="com-guardar" onclick="guardarSeguimientoComercial('${commercialEscape(negocioId)}')" class="px-5 py-2.5 rounded-lg bg-fuchsia-700 text-white font-bold">Guardar seguimiento</button>
+                    <button type="button" onclick="cerrarSeguimientoComercial()" class="${COMMERCIAL_BTN_SEC}">Cancelar</button>
+                    <button type="button" id="com-guardar" onclick="guardarSeguimientoComercial('${commercialEscape(negocioId)}')" class="${COMMERCIAL_BTN_PRI}">Guardar seguimiento</button>
                 </div>
             </div>
         </div>`;
     document.body.appendChild(modal);
+    window.prepararModal?.(modal, 'Seguimiento comercial');
 }
 
 function cerrarSeguimientoComercial() {

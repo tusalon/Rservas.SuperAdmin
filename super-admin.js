@@ -7,7 +7,7 @@ const DIAS_POR_DEFECTO = 15;
 // con fechas viejas de prueba). Aqui se usa el mismo criterio para que la lista
 // de cobros muestre exactamente a quien el sistema esta bloqueando de verdad.
 const FECHA_CORTE_COBRO = '2026-07-19';
-const WHATSAPP_MENSAJE = "Hola, escribimos desde el soporte de Rservas.Roma para saber en qué podemos ayudarle";
+const WHATSAPP_MENSAJE = "Hola, te escribimos desde el soporte de RservasRoma para saber en qué podemos ayudarte";
 const NTFY_TOPIC_GLOBAL = "rservas-vencimientos";
 const ADMIN_EMAIL = "rservasroma@gmail.com";
 const NEGOCIOS_RECTIFICADOS = {
@@ -424,11 +424,11 @@ function mostrarErrorConexion() {
     const listaDiv = document.getElementById('lista-negocios');
     if (listaDiv) {
         listaDiv.innerHTML = `
-            <div class="max-w-7xl mx-auto p-4">
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
-                    <p class="font-bold">❌ Error de conexión</p>
-                    <p>No se pudieron cargar los negocios. Verifica que la vista 'vista_negocios_admin' exista en Supabase.</p>
-                    <button onclick="location.reload()" class="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm">Reintentar</button>
+            <div class="max-w-6xl mx-auto p-4">
+                <div role="alert" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+                    <p class="font-semibold">No se pudieron cargar los salones</p>
+                    <p class="text-sm mt-1">Revisa la conexión. Si sigue fallando, comprueba que exista la vista vista_negocios_admin en Supabase.</p>
+                    <button type="button" onclick="location.reload()" class="${BTN_SEC} mt-3">Reintentar</button>
                 </div>
             </div>
         `;
@@ -500,22 +500,14 @@ function ordenarNegocios(negocios, orden) {
 
 function cambiarOrden(orden) {
     ordenActual = orden;
+    limiteLista = PAGINA_LISTA;
     actualizarListaNegocios();
     actualizarBotonOrden();
 }
 
 function actualizarBotonOrden() {
-    ['comercial', 'reservas', 'semana', 'fecha'].forEach(orden => {
-        const btn = document.getElementById(`order-${orden}`);
-        if (!btn) return;
-
-        btn.classList.remove('active', 'bg-purple-600', 'text-white', 'bg-gray-200', 'text-gray-700');
-        if (ordenActual === orden) {
-            btn.classList.add('active', 'bg-purple-600', 'text-white');
-        } else {
-            btn.classList.add('bg-gray-200', 'text-gray-700');
-        }
-    });
+    const selector = document.getElementById('orden');
+    if (selector) selector.value = ordenActual;
 }
 
 // ==================== ACCIONES ====================
@@ -633,47 +625,7 @@ async function inactivarNegocio(id, nombreNegocio) {
     }
 }
 
-// El embudo comercial ocupaba toda la parte de arriba del panel, y mientras se
-// calculaba dejaba un "Calculando embudo…" que empujaba la lista de negocios
-// fuera de la pantalla — en el movil habia que bajar bastante para ver el
-// primer salon. Ahora vive detras de un boton y arranca cerrado: la lista queda
-// arriba y el embudo se abre cuando de verdad se va a usar.
-// La eleccion se recuerda, para quien prefiera tenerlo siempre abierto.
-let embudoAbierto = (() => {
-    try { return localStorage.getItem('embudoAbierto') === 'true'; } catch (e) { return false; }
-})();
 
-function renderEmbudoPlegable() {
-    const filtroComercialActivo = window.hayFiltroComercialActivo
-        ? window.hayFiltroComercialActivo()
-        : false;
-
-    // Si el embudo esta cerrado pero uno de sus filtros sigue aplicado, la lista
-    // se ve recortada sin explicacion y sin forma de volver atras: el boton de
-    // "Ver todos" vive dentro del panel. Por eso el aviso sale igual.
-    const avisoFiltro = (!embudoAbierto && filtroComercialActivo)
-        ? `<span class="text-xs bg-fuchsia-100 text-fuchsia-800 px-3 py-1.5 rounded-full">
-               Filtro del embudo activo
-               <button onclick="limpiarFiltroComercial()" class="underline ml-1 font-semibold">Ver todos</button>
-           </span>`
-        : '';
-
-    return `
-        <div class="mb-4 flex flex-wrap items-center gap-2">
-            <button onclick="alternarEmbudo()"
-                class="px-4 py-2 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-fuchsia-700 to-purple-700 hover:opacity-90 transition">
-                ${embudoAbierto ? '▲ Ocultar embudo' : '🎯 Ver embudo comercial'}
-            </button>
-            ${avisoFiltro}
-        </div>
-        ${embudoAbierto && window.renderEmbudoComercial ? window.renderEmbudoComercial() : ''}`;
-}
-
-window.alternarEmbudo = function() {
-    embudoAbierto = !embudoAbierto;
-    try { localStorage.setItem('embudoAbierto', String(embudoAbierto)); } catch (e) {}
-    renderHeader();
-};
 
 // Dice de un vistazo si la duena termino el asistente inicial. Es el mismo
 // campo (negocios.configurado) que la app mira para decidir si le muestra el
@@ -686,8 +638,8 @@ window.alternarEmbudo = function() {
 function badgeWizard(negocio) {
     if (negocio.es_tienda_externa === true) return '';
     return negocio.configurado === true
-        ? '<span class="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-700 font-medium" title="Terminó el asistente de configuración inicial">✅ Wizard completo</span>'
-        : '<span class="px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800 font-medium" title="Todavía ve el asistente de configuración al entrar">⏳ Wizard sin terminar</span>';
+        ? chip('Configurado', 'verde')
+        : chip('Sin terminar la configuración', 'ambar');
 }
 
 // reiniciar_negocio() devuelve los conteos con el nombre crudo de cada tabla.
@@ -900,7 +852,7 @@ function getBcrypt() {
 
 function abrirModalCambiarPassword(id, nombreNegocio) {
     if (!getBcrypt()) {
-        alert('No se pudo cargar el cifrado de contrasenas. Recarga la pagina e intenta de nuevo.');
+        alert('No se pudo cargar el cifrado de contraseñas. Recarga la página e inténtalo de nuevo.');
         return;
     }
 
@@ -917,7 +869,7 @@ function abrirModalCambiarPassword(id, nombreNegocio) {
                     <h3 class="text-lg font-bold text-gray-900">Cambiar contraseña</h3>
                     <p class="text-sm text-gray-500">${escapeHtml(nombreNegocio)}</p>
                 </div>
-                <button type="button" onclick="document.getElementById('modal-cambiar-password')?.remove()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                <button type="button" onclick="document.getElementById('modal-cambiar-password')?.remove()" aria-label="Cerrar" class="-mr-2 -mt-1 inline-flex items-center justify-center w-11 h-11 md:w-9 md:h-9 rounded-md text-gray-600 hover:bg-gray-100 text-2xl leading-none">&times;</button>
             </div>
 
             <label class="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
@@ -930,22 +882,22 @@ function abrirModalCambiarPassword(id, nombreNegocio) {
                 <input type="checkbox" id="password-ver" class="rounded"> Ver lo que escribo
             </label>
 
-            <p class="text-xs text-gray-500 mt-3">Se guarda cifrada. Anotala antes de cerrar: despues no hay forma de volver a verla, solo de cambiarla otra vez.</p>
+            <p class="text-xs text-gray-500 mt-3">Se guarda cifrada. Anótala antes de cerrar: después no hay forma de volver a verla, solo de cambiarla otra vez.</p>
 
             <div class="flex gap-2 mt-5">
                 <button type="button" onclick="document.getElementById('modal-cambiar-password')?.remove()" class="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">Cancelar</button>
-                <button type="button" id="password-guardar" onclick="window.guardarPasswordNegocio(${jsArg(id)})" class="flex-1 px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700">Guardar</button>
+                <button type="button" id="password-guardar" onclick="window.guardarPasswordNegocio(${jsArg(id)})" class="flex-1 px-4 py-2 rounded-lg bg-purple-700 text-white font-medium hover:bg-purple-800">Guardar</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
+    prepararModal(modal, 'Cambiar contraseña');
 
     document.getElementById('password-ver').addEventListener('change', (e) => {
         const tipo = e.target.checked ? 'text' : 'password';
         document.getElementById('password-nueva').type = tipo;
         document.getElementById('password-repetir').type = tipo;
     });
-    document.getElementById('password-nueva').focus();
 }
 
 async function guardarPasswordNegocio(id) {
@@ -954,18 +906,18 @@ async function guardarPasswordNegocio(id) {
     const boton = document.getElementById('password-guardar');
 
     if (nueva.length < 6) {
-        alert('La contrasena debe tener al menos 6 caracteres.');
+        alert('La contraseña debe tener al menos 6 caracteres.');
         return;
     }
     if (nueva !== repetir) {
-        alert('Las dos contrasenas no coinciden.');
+        alert('Las dos contraseñas no coinciden.');
         return;
     }
-    if (!confirm('Cambiar la contrasena de este negocio?\n\nLa anterior deja de servir en cuanto se guarde.')) return;
+    if (!confirm('¿Cambiar la contraseña de este salón?\n\nLa anterior deja de servir en cuanto se guarde.')) return;
 
     const cifrador = getBcrypt();
     if (!cifrador) {
-        alert('No se pudo cargar el cifrado de contrasenas. Recarga la pagina e intenta de nuevo.');
+        alert('No se pudo cargar el cifrado de contraseñas. Recarga la página e inténtalo de nuevo.');
         return;
     }
 
@@ -988,19 +940,40 @@ async function guardarPasswordNegocio(id) {
         if (error) throw error;
 
         document.getElementById('modal-cambiar-password')?.remove();
-        alert('Contrasena actualizada. Enviasela al salon para que pueda entrar.');
+        alert('Contraseña actualizada. Envíasela al salón para que pueda entrar.');
     } catch (error) {
         if (boton) {
             boton.disabled = false;
             boton.textContent = 'Guardar';
         }
-        alert('Error cambiando la contrasena: ' + error.message);
+        alert('No se pudo cambiar la contraseña: ' + error.message);
     }
 }
 
-// FUNCIÓN WHATSAPP ORIGINAL (con mensaje de soporte)
+// Todos los modales se anuncian como dialogo, se cierran con Esc (ver
+// instalarAtajos) o tocando fuera, y al cerrarse devuelven el foco a donde
+// estaba (si no, con teclado se volvia al principio de la pagina).
+function prepararModal(modal, titulo) {
+    // Si se abrio desde un menu, el menu ya se cerro: el foco vuelve a su boton.
+    const focoPrevio = document.activeElement?.closest?.('details[data-menu]')?.querySelector('summary')
+        || document.activeElement;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', titulo);
+    modal.dataset.modal = '';
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    const observador = new MutationObserver(() => {
+        if (modal.isConnected) return;
+        observador.disconnect();
+        if (focoPrevio?.isConnected) focoPrevio.focus();
+    });
+    observador.observe(document.body, { childList: true });
+    (modal.querySelector('input, select, textarea') || modal.querySelector('button'))?.focus();
+}
+window.prepararModal = prepararModal;
+
 function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
-    const fechaBase = fechaActual || calcularFechaMasDias(DIAS_POR_DEFECTO);
+    const fechaBase = String(fechaActual || calcularFechaMasDias(DIAS_POR_DEFECTO)).slice(0, 10);
     const modalExistente = document.getElementById('modal-pagado-hasta');
     if (modalExistente) modalExistente.remove();
 
@@ -1014,20 +987,21 @@ function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
                     <h3 class="text-lg font-bold text-gray-900">Pagado hasta</h3>
                     <p class="text-sm text-gray-500">${escapeHtml(nombreNegocio)}</p>
                 </div>
-                <button type="button" onclick="document.getElementById('modal-pagado-hasta')?.remove()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                <button type="button" onclick="document.getElementById('modal-pagado-hasta')?.remove()" aria-label="Cerrar" class="-mr-2 -mt-1 inline-flex items-center justify-center w-11 h-11 md:w-9 md:h-9 rounded-md text-gray-600 hover:bg-gray-100 text-2xl leading-none">&times;</button>
             </div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de vencimiento</label>
             <input id="pagado-hasta-fecha" type="date" value="${fechaBase}" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
             <label class="block text-sm font-medium text-gray-700 mt-4 mb-1">Monto pagado CUP</label>
             <input id="pagado-hasta-monto" type="number" min="1" step="1" value="${PRECIO_MENSUAL}" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
-            <p class="text-xs text-gray-500 mt-2">Ejemplo: si eliges septiembre 25, el negocio queda pagado hasta ese dia.</p>
+            <p class="text-xs text-gray-500 mt-2">Ejemplo: si eliges el 25 de septiembre, el salón queda pagado hasta ese día.</p>
             <div class="flex gap-2 mt-5">
                 <button type="button" onclick="document.getElementById('modal-pagado-hasta')?.remove()" class="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">Cancelar</button>
-                <button type="button" onclick="window.guardarPagadoHasta(${jsArg(id)})" class="flex-1 px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700">Guardar</button>
+                <button type="button" onclick="window.guardarPagadoHasta(${jsArg(id)})" class="flex-1 px-4 py-2 rounded-lg bg-purple-700 text-white font-medium hover:bg-purple-800">Guardar</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
+    prepararModal(modal, 'Pagado hasta');
 }
 
 async function guardarPagadoHasta(id) {
@@ -1035,11 +1009,11 @@ async function guardarPagadoHasta(id) {
     const monto = parseFloat(document.getElementById('pagado-hasta-monto')?.value || PRECIO_MENSUAL);
 
     if (!fecha) {
-        alert('Selecciona una fecha valida');
+        alert('Elige una fecha válida.');
         return;
     }
     if (Number.isNaN(monto) || monto <= 0) {
-        alert('Ingresa un monto valido');
+        alert('Escribe un monto válido.');
         return;
     }
 
@@ -1211,13 +1185,8 @@ function getUltimaVezTexto(negocioId, tipo) {
     const registro = ultimaVezEscrito[negocioId];
     if (!registro) return '';
     
-    if (tipo === 'soporte' && registro.soporte) {
-        return `📝 ${registro.soporte}`;
-    } else if (tipo === 'hola' && registro.hola) {
-        return `📝 ${registro.hola}`;
-    } else if (tipo === 'ultima' && registro.ultima) {
-        return `📝 ${registro.ultima}`;
-    }
+    const fecha = registro[tipo];
+    return fecha ? `Último WhatsApp: ${fecha}` : '';
     
     return '';
 }
@@ -1395,6 +1364,7 @@ async function exportarCSV() {
 function buscarNegocio(termino) {
     textoBuscador = termino;
     filtroBusqueda = termino.toLowerCase().trim();
+    limiteLista = PAGINA_LISTA;
     actualizarListaNegocios();
 }
 
@@ -1409,6 +1379,7 @@ function limpiarBusqueda() {
 function filtrarPorEstado(estado) {
     window.limpiarFiltroComercial?.(false);
     filtroActual = estado;
+    limiteLista = PAGINA_LISTA;
     actualizarListaNegocios();
     actualizarBotonesFiltro();
 }
@@ -1454,41 +1425,129 @@ function negociosFiltrados() {
     return resultados;
 }
 
+const CHIP_FILTRO_ON = ['bg-gray-900', 'text-white', 'border-gray-900'];
+const CHIP_FILTRO_OFF = ['bg-white', 'text-gray-800', 'border-gray-300', 'hover:bg-gray-50'];
+
 function actualizarBotonesFiltro() {
-    const estados = ['todos', 'activa', 'suspendida', 'trial', 'pendiente', 'inactiva', 'eliminados', 'archivados'];
-    estados.forEach(estado => {
-        const btn = document.getElementById(`filtro-${estado}`);
-        if (btn) {
-            btn.classList.remove('bg-gray-800', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-purple-600', 'bg-gray-600', 'bg-pink-600', 'bg-amber-600', 'text-white');
-            btn.classList.remove('bg-gray-200', 'bg-green-100', 'bg-red-100', 'bg-yellow-100', 'bg-purple-100', 'bg-gray-100', 'bg-pink-100', 'bg-amber-100', 'text-gray-700', 'text-green-700', 'text-red-700', 'text-yellow-700', 'text-purple-700', 'text-pink-700', 'text-amber-700');
-            
-            if (filtroActual === estado) {
-                if (estado === 'todos') btn.classList.add('bg-gray-800', 'text-white');
-                else if (estado === 'activa') btn.classList.add('bg-green-600', 'text-white');
-                else if (estado === 'suspendida') btn.classList.add('bg-red-600', 'text-white');
-                else if (estado === 'trial') btn.classList.add('bg-yellow-600', 'text-white');
-                else if (estado === 'pendiente') btn.classList.add('bg-purple-600', 'text-white');
-                else if (estado === 'inactiva') btn.classList.add('bg-gray-600', 'text-white');
-                else if (estado === 'eliminados') btn.classList.add('bg-pink-600', 'text-white');
-                else if (estado === 'archivados') btn.classList.add('bg-slate-600', 'text-white');
-            } else {
-                if (estado === 'todos') btn.classList.add('bg-gray-200', 'text-gray-700');
-                else if (estado === 'activa') btn.classList.add('bg-green-100', 'text-green-700');
-                else if (estado === 'suspendida') btn.classList.add('bg-red-100', 'text-red-700');
-                else if (estado === 'trial') btn.classList.add('bg-yellow-100', 'text-yellow-700');
-                else if (estado === 'pendiente') btn.classList.add('bg-purple-100', 'text-purple-700');
-                else if (estado === 'inactiva') btn.classList.add('bg-gray-100', 'text-gray-700');
-                else if (estado === 'eliminados') btn.classList.add('bg-pink-100', 'text-pink-700');
-                else if (estado === 'archivados') btn.classList.add('bg-slate-100', 'text-slate-700');
-            }
-        }
+    document.querySelectorAll('[data-filtro]').forEach(boton => {
+        const activo = boton.dataset.filtro === filtroActual;
+        boton.setAttribute('aria-pressed', String(activo));
+        boton.classList.remove(...CHIP_FILTRO_ON, ...CHIP_FILTRO_OFF);
+        boton.classList.add(...(activo ? CHIP_FILTRO_ON : CHIP_FILTRO_OFF));
     });
+}
+
+// ==================== ESTILO DEL PANEL ====================
+// Un solo vocabulario para todo el panel: el morado de marca solo en la accion
+// principal; rojo, ambar y verde solo para estados. Los botones miden 44 px en
+// el movil (se usan con el pulgar) y 36 px en el PC, donde cabe mas.
+const UI = {
+    btn: 'inline-flex items-center justify-center gap-1.5 rounded-md px-3 min-h-11 md:min-h-9 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600 disabled:opacity-50 disabled:cursor-wait',
+    panel: 'bg-white border border-gray-200 rounded-lg',
+};
+const BTN_PRI = `${UI.btn} bg-purple-700 text-white hover:bg-purple-800`;
+const BTN_SEC = `${UI.btn} bg-white text-gray-800 border border-gray-300 hover:bg-gray-50`;
+const BTN_PELIGRO = `${UI.btn} bg-white text-red-700 border border-red-200 hover:bg-red-50`;
+const BTN_TEXTO = `${UI.btn} text-purple-800 hover:bg-purple-50`;
+const ITEM_MENU = 'w-full text-left px-3 min-h-11 md:min-h-9 text-sm text-gray-800 hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:outline-none';
+
+const TONOS = {
+    rojo: 'bg-red-50 text-red-800 ring-red-200',
+    ambar: 'bg-amber-50 text-amber-900 ring-amber-200',
+    verde: 'bg-green-50 text-green-800 ring-green-200',
+    morado: 'bg-purple-50 text-purple-800 ring-purple-200',
+    gris: 'bg-gray-100 text-gray-700 ring-gray-200',
+};
+
+// texto: HTML ya seguro (los datos de la base se escapan antes de llegar aqui)
+function chip(texto, tono = 'gris') {
+    return `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap ${TONOS[tono] || TONOS.gris}">${texto}</span>`;
+}
+
+const ESTADO_SUSCRIPCION = {
+    activa: ['Activo', 'verde'],
+    trial: ['En prueba', 'ambar'],
+    suspendida: ['Suspendido', 'rojo'],
+    inactiva: ['Baja', 'gris'],
+};
+
+const ICONO_FLECHA = '<svg aria-hidden="true" class="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.25 4.39a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd"/></svg>';
+
+// Menu desplegable con <details>: se cierra al tocar fuera, al elegir una
+// opcion o con Esc (ver instalarAtajos).
+function menuDesplegable(etiqueta, items, { alinear = 'right', ancho = 'w-64' } = {}) {
+    return `
+        <details class="relative" data-menu>
+            <summary class="${BTN_SEC} cursor-pointer list-none [&::-webkit-details-marker]:hidden">${etiqueta}${ICONO_FLECHA}</summary>
+            <div role="menu" class="absolute ${alinear === 'left' ? 'left-0' : 'right-0'} z-30 mt-1 ${ancho} ${UI.panel} shadow-lg py-1">${items}</div>
+        </details>`;
+}
+
+function itemMenu(texto, onclick, clases = '') {
+    return `<button type="button" role="menuitem" onclick="${onclick}" class="${ITEM_MENU} ${clases}">${texto}</button>`;
+}
+
+// Secciones plegables del panel. Recuerdan si se dejaron abiertas.
+const SECCIONES_KEY = 'secciones_abiertas_admin';
+let seccionesAbiertas = (() => {
+    try { return JSON.parse(localStorage.getItem(SECCIONES_KEY)) || {}; } catch (e) { return {}; }
+})();
+
+function recordarSeccion(clave, abierta) {
+    if (Boolean(seccionesAbiertas[clave]) === abierta) return;
+    seccionesAbiertas[clave] = abierta;
+    try { localStorage.setItem(SECCIONES_KEY, JSON.stringify(seccionesAbiertas)); } catch (e) {}
+}
+window.recordarSeccion = recordarSeccion;
+
+function abrirSeccion(clave) {
+    recordarSeccion(clave, true);
+    renderHeader();
+    document.getElementById(`seccion-${clave}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.abrirSeccion = abrirSeccion;
+
+function panelPlegable(clave, titulo, resumen, contenido, urgente = false) {
+    return `
+        <details id="seccion-${clave}" class="${UI.panel} mb-2 scroll-mt-4 group" ${seccionesAbiertas[clave] ? 'open' : ''} ontoggle="recordarSeccion('${clave}', this.open)">
+            <summary class="flex items-center gap-3 px-4 min-h-12 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden rounded-lg hover:bg-gray-50">
+                <span class="font-semibold text-gray-900 shrink-0">${titulo}</span>
+                <span class="text-sm ${urgente ? 'text-red-700 font-medium' : 'text-gray-600'} flex-1 min-w-0 truncate">${resumen}</span>
+                <span class="text-gray-500 transition-transform group-open:rotate-180">${ICONO_FLECHA}</span>
+            </summary>
+            <div class="border-t border-gray-200 px-4 py-2">${contenido}</div>
+        </details>`;
+}
+
+function recorte(texto, max) {
+    const limpio = String(texto || '').replace(/\s+/g, ' ').trim();
+    return limpio.length > max ? `${limpio.slice(0, max - 1)}…` : limpio;
+}
+
+function enlaceWhatsApp(n, texto = 'WhatsApp') {
+    const tel = normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
+    return tel
+        ? `<a href="https://wa.me/${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" rel="noopener" class="${BTN_SEC}">${texto}</a>`
+        : '';
+}
+
+function botonRegistrarPago(n, clases = BTN_PRI) {
+    return `<button type="button" onclick="window.abrirModalPagadoHasta(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${jsArg(fechaPagoDe(n))})" class="${clases}">Registrar pago</button>`;
 }
 
 // ==================== RENDERIZADO DEL HEADER ====================
 // ==================== COBROS DE LA SEMANA ====================
+// Igual que parseFechaLocal de rservasroma/utils/suscripcion.js: el dia
+// AAAA-MM-DD se lee como fecha LOCAL. new Date('2026-09-29') lo toma como
+// medianoche UTC, que en Cuba (UTC-4) es el dia anterior: el panel decia
+// "Vence hoy" a quien la app de la duena aun no bloqueaba.
+function fechaLocal(fecha) {
+    const match = String(fecha || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(fecha);
+}
+
 function _medianocheCobro(fecha) {
-    const d = new Date(fecha);
+    const d = fechaLocal(fecha);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
@@ -1539,7 +1598,7 @@ function calcularCobros(negocios) {
 function _fechaCorta(f) {
     if (!f) return '—';
     try {
-        return new Date(f).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+        return fechaLocal(f).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
     } catch (e) { return String(f).slice(0, 10); }
 }
 
@@ -1547,66 +1606,41 @@ function _filaCobro(item, tipo) {
     const n = item.n;
     let etiqueta;
     if (item.motivo === 'suspendida') etiqueta = 'Suspendido a mano';
-    else if (item.dias === 0) etiqueta = 'Vence HOY';
-    else if (item.dias < 0) etiqueta = `Vencido hace ${Math.abs(item.dias)} d`;
-    else if (item.dias === 1) etiqueta = 'Vence MAÑANA';
+    else if (item.dias === 0) etiqueta = 'Vence hoy';
+    else if (item.dias < 0) etiqueta = `Venció hace ${Math.abs(item.dias)} d`;
+    else if (item.dias === 1) etiqueta = 'Vence mañana';
     else etiqueta = `En ${item.dias} días`;
 
-    const color = tipo === 'bloqueado' ? 'text-red-700' : 'text-amber-700';
-    const tel = normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
-    const btnWhats = tel
-        ? `<a href="https://wa.me/${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium">WhatsApp</a>`
-        : '';
-
     return `
-        <div class="flex items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+        <li class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-2.5">
             <div class="min-w-0 flex-1">
-                <div class="font-medium text-gray-800 text-sm truncate">${escapeHtml(n.nombre || '(sin nombre)')}</div>
-                <div class="text-xs ${color}">${etiqueta} · ${_fechaCorta(item.fecha)}</div>
+                <div class="font-medium text-gray-900 truncate">${escapeHtml(n.nombre || '(sin nombre)')}</div>
+                <div class="text-sm ${tipo === 'bloqueado' ? 'text-red-700' : 'text-amber-800'}">${etiqueta} · ${_fechaCorta(item.fecha)}</div>
             </div>
-            <div class="flex gap-1.5 shrink-0">
-                ${btnWhats}
-                <button onclick="window.abrirModalPagadoHasta(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${jsArg(fechaPagoDe(n))})"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded text-xs font-medium">Registrar pago</button>
+            <div class="flex flex-wrap gap-2 sm:shrink-0">
+                ${enlaceWhatsApp(n)}
+                ${botonRegistrarPago(n, BTN_SEC)}
             </div>
-        </div>
+        </li>
     `;
 }
 
 function renderSeccionCobros() {
-    const { bloqueados, porCobrar, heredados } = calcularCobros(negociosData);
-    if (bloqueados.length === 0 && porCobrar.length === 0) {
-        return `
-            <div class="mb-6 bg-white rounded-xl shadow p-4 text-sm text-gray-500">
-                💰 <strong class="text-gray-700">Cobros</strong> — nadie vence esta semana ni hay salones bloqueados.
-                ${heredados ? `<span class="text-gray-400">(${heredados} con fechas viejas anteriores al ${_fechaCorta(FECHA_CORTE_COBRO)}: no cuentan hasta que les registres un pago)</span>` : ''}
-            </div>
-        `;
-    }
-
+    const { bloqueados, porCobrar, heredados } = calcularCobros(negociosData.filter(n => n.archivado !== true));
+    const grupo = (titulo, nota, filas, vacio) => `
+        <div class="py-2">
+            <h3 class="text-sm font-semibold text-gray-900">${titulo}</h3>
+            <p class="text-sm text-gray-600">${nota}</p>
+            ${filas.length ? `<ul class="divide-y divide-gray-200">${filas.join('')}</ul>` : `<p class="py-2 text-sm text-gray-600">${vacio}</p>`}
+        </div>`;
     return `
-        <div class="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="bg-white rounded-xl shadow overflow-hidden">
-                <div class="bg-red-50 px-4 py-2.5 border-b border-red-100">
-                    <span class="font-bold text-red-700 text-sm">🔒 Bloqueados ahora (${bloqueados.length})</span>
-                    <p class="text-xs text-red-600 mt-0.5">No pueden entrar a su panel. Sus clientas sí reservan.</p>
-                </div>
-                <div class="px-4 py-1 max-h-72 overflow-y-auto">
-                    ${bloqueados.length ? bloqueados.map(i => _filaCobro(i, 'bloqueado')).join('') : '<p class="text-sm text-gray-400 py-3">Ninguno 🎉</p>'}
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow overflow-hidden">
-                <div class="bg-amber-50 px-4 py-2.5 border-b border-amber-100">
-                    <span class="font-bold text-amber-700 text-sm">⏰ Por cobrar esta semana (${porCobrar.length})</span>
-                    <p class="text-xs text-amber-600 mt-0.5">Ya les está avisando la app (3, 2 y 1 día antes).</p>
-                </div>
-                <div class="px-4 py-1 max-h-72 overflow-y-auto">
-                    ${porCobrar.length ? porCobrar.map(i => _filaCobro(i, 'porcobrar')).join('') : '<p class="text-sm text-gray-400 py-3">Nadie vence en 7 días</p>'}
-                </div>
-            </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 lg:gap-6 divide-y divide-gray-200 lg:divide-y-0">
+            ${grupo(`Bloqueados ahora (${bloqueados.length})`, 'No pueden entrar a su panel. Sus clientas sí reservan.',
+                bloqueados.map(i => _filaCobro(i, 'bloqueado')), 'Ninguno.')}
+            ${grupo(`Por cobrar esta semana (${porCobrar.length})`, 'La app ya les avisa 3, 2 y 1 día antes.',
+                porCobrar.map(i => _filaCobro(i, 'porcobrar')), 'Nadie vence en 7 días.')}
         </div>
-        ${heredados ? `<div class="mb-6 -mt-3 text-xs text-gray-400">ℹ️ ${heredados} salones tienen fechas anteriores al ${_fechaCorta(FECHA_CORTE_COBRO)} (pruebas viejas): el sistema los ignora y no los bloquea hasta que les registres un pago.</div>` : ''}
+        ${heredados ? `<p class="py-2 text-sm text-gray-600">${heredados} salones tienen fechas anteriores al ${_fechaCorta(FECHA_CORTE_COBRO)} (pruebas viejas): el sistema los ignora y no los bloquea hasta que les registres un pago.</p>` : ''}
     `;
 }
 
@@ -1657,47 +1691,22 @@ function calcularSalud(negocios) {
 }
 
 function renderSeccionSalud() {
-    const { criticos, totalConProblemas } = calcularSalud(negociosData);
-    if (!totalConProblemas) return '';
-
-    const filas = criticos.slice(0, 12).map(({ n, problemas, dias }) => {
-        const tel = normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
-        const btnWhats = tel
-            ? `<a href="https://wa.me/${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">WhatsApp</a>`
-            : '';
-        const etiquetaPlan = n.estado_suscripcion === 'activa'
-            ? '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">PAGA</span>'
-            : `<span class="text-xs text-gray-400">${dias}d</span>`;
-        return `
-            <div class="flex items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-gray-800 text-sm truncate">${escapeHtml(n.nombre || '(sin nombre)')}</span>
-                        ${etiquetaPlan}
-                    </div>
-                    <div class="text-xs text-red-600">${problemas.map(escapeHtml).join(' · ')}</div>
+    const { criticos } = calcularSalud(negociosData.filter(n => n.archivado !== true));
+    const filas = criticos.map(({ n, problemas, dias }) => `
+        <li class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-2.5">
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="font-medium text-gray-900 truncate">${escapeHtml(n.nombre || '(sin nombre)')}</span>
+                    ${n.estado_suscripcion === 'activa' ? chip('Paga', 'verde') : chip(`${dias} d`, 'gris')}
                 </div>
-                ${btnWhats}
+                <div class="text-sm text-red-700">${problemas.map(escapeHtml).join(' · ')}</div>
             </div>
-        `;
-    }).join('');
-
-    const ocultos = criticos.length > 12 ? criticos.length - 12 : 0;
+            <div class="flex flex-wrap gap-2 sm:shrink-0">${enlaceWhatsApp(n)}</div>
+        </li>`).join('');
 
     return `
-        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden">
-            <div class="bg-orange-50 px-4 py-2.5 border-b border-orange-100 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                    <span class="font-bold text-orange-700 text-sm">🚧 Salones que necesitan ayuda (${criticos.length})</span>
-                    <p class="text-xs text-orange-600 mt-0.5">No pueden recibir reservas hasta resolverlo. Se listan los que pagan y los que entraron hace menos de 30 días.</p>
-                </div>
-                <span class="text-xs text-gray-500">${totalConProblemas} con algo pendiente en total</span>
-            </div>
-            <div class="px-4 py-1 max-h-80 overflow-y-auto">
-                ${filas || '<p class="text-sm text-gray-400 py-3">Ninguno urgente 🎉</p>'}
-            </div>
-            ${ocultos ? `<div class="px-4 py-2 text-xs text-gray-400 border-t">y ${ocultos} más…</div>` : ''}
-        </div>
+        <p class="py-2 text-sm text-gray-600">No pueden recibir reservas hasta resolverlo. Salen los que pagan y los que entraron hace menos de 30 días.</p>
+        ${filas ? `<ul class="divide-y divide-gray-200">${filas}</ul>` : '<p class="py-2 text-sm text-gray-600">Ninguno urgente.</p>'}
     `;
 }
 
@@ -1809,38 +1818,37 @@ function mostrarAccesoRestablecido(nombre, acceso) {
     modal.innerHTML = `
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
             <div class="flex items-start justify-between gap-3 mb-1">
-                <h3 class="text-lg font-bold text-gray-900">✅ Acceso restablecido</h3>
-                <button type="button" onclick="document.getElementById('modal-acceso-restablecido')?.remove()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                <h3 class="text-lg font-semibold text-gray-900">Acceso restablecido</h3>
+                <button type="button" onclick="document.getElementById('modal-acceso-restablecido')?.remove()" aria-label="Cerrar" class="-mr-2 -mt-1 inline-flex items-center justify-center w-11 h-11 md:w-9 md:h-9 rounded-md text-gray-600 hover:bg-gray-100 text-2xl leading-none">&times;</button>
             </div>
-            <p class="text-sm text-gray-500 mb-4">${escapeHtml(nombre)} — envíaselo por WhatsApp a la dueña. No vuelve a mostrarse.</p>
+            <p class="text-sm text-gray-600 mb-4">${escapeHtml(nombre)}: envíaselo por WhatsApp a la dueña. No vuelve a mostrarse.</p>
 
-            <div class="space-y-2">
-                <div class="flex items-center justify-between gap-3 bg-gray-50 rounded-lg p-3">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-wide text-gray-400 font-bold">Usuario (WhatsApp)</p>
-                        <p class="text-base font-bold text-gray-900">${escapeHtml(acceso.usuario)}</p>
-                    </div>
+            <dl class="divide-y divide-gray-200 rounded-md border border-gray-200">
+                <div class="px-3 py-2.5">
+                    <dt class="text-sm text-gray-600">Usuario (WhatsApp)</dt>
+                    <dd class="text-base font-semibold text-gray-900 break-all">${escapeHtml(acceso.usuario)}</dd>
                 </div>
-                <div class="flex items-center justify-between gap-3 bg-pink-50 rounded-lg p-3">
-                    <div>
-                        <p class="text-[11px] uppercase tracking-wide text-pink-500 font-bold">Contraseña nueva</p>
-                        <p class="text-base font-bold text-gray-900 font-mono">${escapeHtml(acceso.password)}</p>
+                <div class="px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <dt class="text-sm text-gray-600">Contraseña nueva</dt>
+                        <dd class="text-base font-semibold text-gray-900 font-mono break-all">${escapeHtml(acceso.password)}</dd>
                     </div>
-                    <button type="button" onclick="navigator.clipboard?.writeText(${jsArg(acceso.password)})" class="text-xs font-semibold text-pink-600 hover:text-pink-700 shrink-0">Copiar</button>
+                    <button type="button" onclick="navigator.clipboard?.writeText(${jsArg(acceso.password)})" class="${BTN_SEC} shrink-0">Copiar</button>
                 </div>
-                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                    <p class="text-[11px] uppercase tracking-wide text-amber-700 font-bold">Código de recuperación nuevo</p>
-                    <div class="mt-1 flex items-center justify-between gap-3">
-                        <code class="text-sm font-bold tracking-wider text-gray-900">${escapeHtml(acceso.codigo_recuperacion)}</code>
-                        <button type="button" onclick="navigator.clipboard?.writeText(${jsArg(acceso.codigo_recuperacion)})" class="text-xs font-semibold text-amber-700 hover:text-amber-800 shrink-0">Copiar</button>
+                <div class="px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <dt class="text-sm text-gray-600">Código de recuperación nuevo</dt>
+                        <dd class="text-base font-semibold text-gray-900 font-mono break-all">${escapeHtml(acceso.codigo_recuperacion)}</dd>
                     </div>
+                    <button type="button" onclick="navigator.clipboard?.writeText(${jsArg(acceso.codigo_recuperacion)})" class="${BTN_SEC} shrink-0">Copiar</button>
                 </div>
-            </div>
+            </dl>
 
-            <button type="button" onclick="document.getElementById('modal-acceso-restablecido')?.remove()" class="mt-5 w-full px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700">Listo</button>
+            <button type="button" onclick="document.getElementById('modal-acceso-restablecido')?.remove()" class="${BTN_PRI} mt-5 w-full">Listo</button>
         </div>
     `;
     document.body.appendChild(modal);
+    prepararModal(modal, 'Acceso restablecido');
 }
 window.restablecerAccesoTienda = restablecerAccesoTienda;
 
@@ -1872,22 +1880,23 @@ function verArticuloPorAprobar(tipo, itemId) {
     modal.innerHTML = `
         <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
             <div class="relative aspect-square bg-gray-100">
-                ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-5xl">🛍️</div>'}
-                <button type="button" onclick="document.getElementById('modal-articulo-tienda')?.remove()" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 text-gray-700 text-xl leading-none">&times;</button>
+                ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-sm text-gray-600">Sin foto</div>'}
+                <button type="button" onclick="document.getElementById('modal-articulo-tienda')?.remove()" aria-label="Cerrar" class="absolute top-2 right-2 w-11 h-11 rounded-full bg-white/90 text-gray-800 text-2xl leading-none">&times;</button>
                 ${item.tipo === 'curso' ? '<span class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-gray-900 text-white text-[11px] font-bold">Curso</span>' : ''}
             </div>
             <div class="p-4">
-                <p class="text-xs text-gray-400">${escapeHtml(item.tiendaNombre || '')}</p>
-                <p class="font-bold text-gray-900 text-lg">${escapeHtml(item.nombre || '(sin nombre)')}</p>
+                <p class="text-sm text-gray-600">${escapeHtml(item.tiendaNombre || '')}</p>
+                <p class="font-semibold text-gray-900 text-lg break-words">${escapeHtml(item.nombre || '(sin nombre)')}</p>
                 <div class="flex items-center gap-3 mt-1">
-                    <p class="font-bold text-pink-700">${Number(item.precio || 0)} ${escapeHtml(item.moneda || 'CUP')}</p>
-                    ${disponibilidad ? `<p class="text-sm text-gray-500">${disponibilidad}</p>` : ''}
+                    <p class="font-semibold text-gray-900 tabular-nums">${Number(item.precio || 0)} ${escapeHtml(item.moneda || 'CUP')}</p>
+                    ${disponibilidad ? `<p class="text-sm text-gray-600">${disponibilidad}</p>` : ''}
                 </div>
-                ${item.descripcion ? `<p class="text-sm text-gray-600 mt-3 leading-relaxed">${escapeHtml(item.descripcion)}</p>` : '<p class="text-sm text-gray-400 mt-3 italic">Sin descripción.</p>'}
+                ${item.descripcion ? `<p class="text-sm text-gray-800 mt-3 leading-relaxed break-words">${escapeHtml(item.descripcion)}</p>` : '<p class="text-sm text-gray-600 mt-3">Sin descripción.</p>'}
             </div>
         </div>
     `;
     document.body.appendChild(modal);
+    prepararModal(modal, item.nombre || 'Artículo');
 }
 window.verArticuloPorAprobar = verArticuloPorAprobar;
 
@@ -1895,55 +1904,46 @@ function renderTiendasPorAprobar() {
     if (!tiendasPorAprobarData.length) return '';
 
     const tarjetaArticulo = (item, tipo) => `
-        <button type="button" onclick="verArticuloPorAprobar(${jsArg(tipo)}, ${jsArg(item.id)})" class="text-left group">
-            <div class="relative aspect-square rounded-lg bg-gray-100 overflow-hidden border border-gray-200 group-hover:border-purple-400 transition">
-                ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>'}
-                ${(tipo === 'curso' ? item.cupos === 0 : item.stock === 0) ? '<span class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/80 text-white text-[9px] font-bold">Sin stock</span>' : ''}
+        <button type="button" onclick="verArticuloPorAprobar(${jsArg(tipo)}, ${jsArg(item.id)})" class="text-left group rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600">
+            <div class="relative aspect-square rounded-md bg-gray-100 overflow-hidden border border-gray-200 group-hover:border-purple-500">
+                ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" loading="lazy" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-xs text-gray-500">Sin foto</div>'}
+                ${(tipo === 'curso' ? item.cupos === 0 : item.stock === 0) ? '<span class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-gray-900 text-white text-[10px] font-semibold">Sin stock</span>' : ''}
             </div>
-            <p class="mt-1 text-[11px] text-gray-700 truncate">${escapeHtml(item.nombre || '(sin nombre)')}</p>
-            <p class="text-[11px] font-bold text-pink-700">${Number(item.precio || 0)} ${escapeHtml(item.moneda || 'CUP')}</p>
+            <p class="mt-1 text-xs text-gray-800 truncate">${escapeHtml(item.nombre || '(sin nombre)')}</p>
+            <p class="text-xs font-semibold text-gray-900 tabular-nums">${Number(item.precio || 0)} ${escapeHtml(item.moneda || 'CUP')}</p>
         </button>
     `;
 
-    const tarjetas = tiendasPorAprobarData.map(t => {
+    const tiendas = tiendasPorAprobarData.map(t => {
         const articulos = [...t.productos.map(p => ({ item: p, tipo: 'producto' })), ...t.cursos.map(c => ({ item: c, tipo: 'curso' }))];
         return `
-            <details class="border border-gray-200 rounded-xl mb-3 last:mb-0" open>
-                <summary class="p-4 cursor-pointer list-none flex flex-col sm:flex-row sm:items-start gap-3">
-                    <div class="flex items-start gap-3 min-w-0 flex-1">
-                        <div class="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 shrink-0">
-                            ${t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-xl">🏪</div>'}
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="font-bold text-gray-800">${escapeHtml(t.nombre || '(sin nombre)')} <span class="text-gray-400 font-normal text-xs">(${articulos.length} art.)</span></p>
-                            <p class="text-xs text-gray-500">${escapeHtml(t.especialidad || 'Belleza')} · ${escapeHtml(t.provincia || '')}${t.municipio ? ' · ' + escapeHtml(t.municipio) : ''} · ${escapeHtml(t.telefono || 'sin WhatsApp')}</p>
-                            ${t.mensaje_bienvenida ? `<p class="text-xs text-gray-500 mt-1 italic">"${escapeHtml(t.mensaje_bienvenida)}"</p>` : ''}
-                        </div>
+            <li class="py-3">
+                <div class="flex items-start gap-3">
+                    <div class="w-12 h-12 rounded-md bg-gray-100 overflow-hidden border border-gray-200 shrink-0">
+                        ${t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" loading="lazy" class="w-full h-full object-cover">` : ''}
                     </div>
-                    <div class="flex flex-wrap gap-1.5 shrink-0">
-                        <button onclick="event.stopPropagation(); aprobarTiendaExterna(${jsArg(t.id)}, ${jsArg(t.nombre)})" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">✅ Aprobar</button>
-                        <button onclick="event.stopPropagation(); rechazarTiendaExterna(${jsArg(t.id)}, ${jsArg(t.nombre)})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Rechazar</button>
-                        <button onclick="event.stopPropagation(); restablecerAccesoTienda(${jsArg(t.id)}, ${jsArg(t.nombre)})" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold">🔑 Acceso</button>
-                    </div>
-                </summary>
-                <div class="px-4 pb-4">
-                    ${t.imagen_fondo_url ? `<div class="h-28 rounded-lg overflow-hidden mb-3"><img src="${escapeHtml(t.imagen_fondo_url)}" alt="Portada" class="w-full h-full object-cover"></div>` : ''}
-                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                        ${articulos.length ? articulos.map(a => tarjetaArticulo(a.item, a.tipo)).join('') : '<p class="col-span-full text-xs text-gray-400">Sin productos/cursos activos (no debería poder enviar a revisión).</p>'}
+                    <div class="min-w-0 flex-1">
+                        <p class="font-medium text-gray-900 break-words">${escapeHtml(t.nombre || '(sin nombre)')} <span class="font-normal text-sm text-gray-600">· ${articulos.length} artículos</span></p>
+                        <p class="text-sm text-gray-600 break-words">${escapeHtml(t.especialidad || 'Belleza')} · ${escapeHtml(t.provincia || '')}${t.municipio ? ' · ' + escapeHtml(t.municipio) : ''} · ${escapeHtml(t.telefono || 'sin WhatsApp')}</p>
+                        ${t.mensaje_bienvenida ? `<p class="text-sm text-gray-600 mt-1 italic break-words">"${escapeHtml(t.mensaje_bienvenida)}"</p>` : ''}
                     </div>
                 </div>
-            </details>
+                ${t.imagen_fondo_url ? `<div class="h-28 rounded-md overflow-hidden mt-3"><img src="${escapeHtml(t.imagen_fondo_url)}" alt="Portada de la tienda" loading="lazy" class="w-full h-full object-cover"></div>` : ''}
+                <div class="mt-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                    ${articulos.length ? articulos.map(a => tarjetaArticulo(a.item, a.tipo)).join('') : '<p class="col-span-full text-sm text-gray-600">Sin productos ni cursos activos: no debería haber podido enviarse a revisión.</p>'}
+                </div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onclick="aprobarTiendaExterna(${jsArg(t.id)}, ${jsArg(t.nombre)})" class="${BTN_PRI}">Aprobar y publicar</button>
+                    <button type="button" onclick="rechazarTiendaExterna(${jsArg(t.id)}, ${jsArg(t.nombre)})" class="${BTN_PELIGRO}">Rechazar</button>
+                    <button type="button" onclick="restablecerAccesoTienda(${jsArg(t.id)}, ${jsArg(t.nombre)})" class="${BTN_SEC}">Restablecer acceso</button>
+                </div>
+            </li>
         `;
     }).join('');
 
     return `
-        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden border-2 border-amber-300">
-            <div class="bg-amber-50 px-4 py-2.5 border-b border-amber-100">
-                <span class="font-bold text-amber-800 text-sm">⏳ Tiendas por aprobar (${tiendasPorAprobarData.length})</span>
-                <p class="text-xs text-amber-700 mt-0.5">Revisa los productos antes de publicar. Se ven en RomaHub solo tras aprobarlas.</p>
-            </div>
-            <div class="px-4 py-3">${tarjetas}</div>
-        </div>
+        <p class="py-2 text-sm text-gray-600">Revisa los productos antes de publicar. Solo se ven en RomaHub después de aprobarlas.</p>
+        <ul class="divide-y divide-gray-200">${tiendas}</ul>
     `;
 }
 
@@ -2016,86 +2016,68 @@ function renderSeccionRomaHub() {
     reportesTiendaData.forEach(r => {
         reportesPorNegocio[r.negocio_id] = (reportesPorNegocio[r.negocio_id] || 0) + (r.estado === 'pendiente' ? 1 : 0);
     });
+    const ESTADO_ROMAHUB = {
+        borrador: ['Borrador', 'gris'],
+        en_revision: ['En revisión', 'ambar'],
+        rechazada: ['Rechazada', 'rojo'],
+        aprobada: ['Verificada', 'verde'],
+    };
 
     const filasTiendas = tiendasExternas.slice(0, 30).map(n => {
         const numReportes = reportesPorNegocio[n.id] || 0;
         const oculta = n.configurado === false;
-        const badgeReportes = numReportes > 0
-            ? `<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">🚩 ${numReportes}</span>`
-            : '';
-        const badgeEstado = oculta
-            ? '<span class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-bold">Oculta</span>'
-            : '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">Visible</span>';
-        const romahubEstadoBadges = {
-            borrador: '<span class="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-bold">Borrador</span>',
-            en_revision: '<span class="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">⏳ En revisión</span>',
-            rechazada: '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">Rechazada</span>',
-            aprobada: '<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">✓ Verificada</span>'
-        };
-        const badgeRomahub = romahubEstadoBadges[n.romahub_estado] || '';
-        const btnToggle = oculta
-            ? `<button onclick="activarTiendaExterna(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">Reactivar</button>`
-            : `<button onclick="ocultarTiendaExterna(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-medium shrink-0">Ocultar</button>`;
+        const [estadoTexto, estadoTono] = ESTADO_ROMAHUB[n.romahub_estado] || ['', 'gris'];
         return `
-            <div class="flex items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+            <li class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-2.5">
                 <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <span class="font-medium text-gray-800 text-sm truncate">${escapeHtml(n.nombre || '(sin nombre)')}</span>
-                        ${badgeEstado}
-                        ${badgeRomahub}
-                        ${badgeReportes}
+                        <span class="font-medium text-gray-900 break-words">${escapeHtml(n.nombre || '(sin nombre)')}</span>
+                        ${oculta ? chip('Oculta', 'gris') : chip('Visible', 'verde')}
+                        ${estadoTexto ? chip(estadoTexto, estadoTono) : ''}
+                        ${numReportes ? chip(`${numReportes} ${numReportes === 1 ? 'reporte' : 'reportes'}`, 'rojo') : ''}
                     </div>
-                    <div class="text-xs text-gray-400">${escapeHtml(n.provincia || 'sin provincia')}${n.municipio ? ' · ' + escapeHtml(n.municipio) : ''}</div>
+                    <div class="text-sm text-gray-600">${escapeHtml(n.provincia || 'Sin provincia')}${n.municipio ? ' · ' + escapeHtml(n.municipio) : ''}</div>
                 </div>
-                <div class="flex gap-1.5 shrink-0">
-                    <button onclick="restablecerAccesoTienda(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded text-xs font-medium">🔑 Acceso</button>
-                    ${btnToggle}
+                <div class="flex flex-wrap gap-2 sm:shrink-0">
+                    <button type="button" onclick="restablecerAccesoTienda(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="${BTN_SEC}">Restablecer acceso</button>
+                    ${oculta
+                        ? `<button type="button" onclick="activarTiendaExterna(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="${BTN_SEC}">Volver a mostrar</button>`
+                        : `<button type="button" onclick="ocultarTiendaExterna(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="${BTN_PELIGRO}">Ocultar</button>`}
                 </div>
-            </div>
+            </li>
         `;
     }).join('');
 
     const filasReportes = pendientes.slice(0, 20).map(r => {
         const negocio = negocioPorId[r.negocio_id];
-        const nombreNegocio = negocio ? negocio.nombre : '(negocio eliminado)';
         return `
-            <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+            <li class="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 py-2.5">
                 <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <span class="font-medium text-gray-800 text-sm">${escapeHtml(nombreNegocio)}</span>
-                        <span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">${escapeHtml(r.motivo)}</span>
+                        <span class="font-medium text-gray-900">${escapeHtml(negocio ? negocio.nombre : '(tienda eliminada)')}</span>
+                        ${chip(escapeHtml(r.motivo), 'ambar')}
                     </div>
-                    ${r.detalle ? `<div class="text-xs text-gray-500 mt-0.5">${escapeHtml(r.detalle)}</div>` : ''}
-                    <div class="text-xs text-gray-400 mt-0.5">${new Date(r.created_at).toLocaleString('es-ES')}</div>
+                    ${r.detalle ? `<p class="text-sm text-gray-700 mt-0.5 break-words">${escapeHtml(r.detalle)}</p>` : ''}
+                    <p class="text-sm text-gray-600 mt-0.5">${new Date(r.created_at).toLocaleString('es-ES')}</p>
                 </div>
-                <div class="flex gap-1.5 shrink-0">
-                    ${negocio && negocio.es_tienda_externa ? `<button onclick="ocultarTiendaExterna(${jsArg(negocio.id)}, ${jsArg(negocio.nombre)})" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs font-medium">Ocultar</button>` : ''}
-                    <button onclick="resolverReporteTienda(${jsArg(r.id)}, 'descartado')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1 rounded text-xs font-medium">Descartar</button>
-                    <button onclick="resolverReporteTienda(${jsArg(r.id)}, 'resuelto')" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-xs font-medium">Resuelto</button>
+                <div class="flex flex-wrap gap-2 sm:shrink-0">
+                    ${negocio && negocio.es_tienda_externa ? `<button type="button" onclick="ocultarTiendaExterna(${jsArg(negocio.id)}, ${jsArg(negocio.nombre)})" class="${BTN_PELIGRO}">Ocultar tienda</button>` : ''}
+                    <button type="button" onclick="resolverReporteTienda(${jsArg(r.id)}, 'descartado')" class="${BTN_SEC}">Descartar</button>
+                    <button type="button" onclick="resolverReporteTienda(${jsArg(r.id)}, 'resuelto')" class="${BTN_PRI}">Resuelto</button>
                 </div>
-            </div>
+            </li>
         `;
     }).join('');
 
     return `
-        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden">
-            <div class="bg-pink-50 px-4 py-2.5 border-b border-pink-100 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                    <span class="font-bold text-pink-700 text-sm">🛍️ RomaHub — tiendas externas (${tiendasExternas.length})</span>
-                    <p class="text-xs text-pink-600 mt-0.5">Vendedores sin cuenta rservasroma, auto-registrados gratis. ${pendientes.length} reporte(s) sin revisar.</p>
-                </div>
-            </div>
-            ${filasReportes ? `
-                <div class="px-4 py-2 bg-orange-50/50 border-b border-orange-100">
-                    <p class="text-xs font-bold text-orange-700 mb-1">🚩 Reportes pendientes</p>
-                    <div class="max-h-64 overflow-y-auto">${filasReportes}</div>
-                </div>
-            ` : ''}
-            <div class="px-4 py-1 max-h-72 overflow-y-auto">
-                ${filasTiendas || '<p class="text-sm text-gray-400 py-3">Ninguna tienda externa todavía.</p>'}
-            </div>
-            ${tiendasExternas.length > 30 ? `<div class="px-4 py-2 text-xs text-gray-400 border-t">y ${tiendasExternas.length - 30} más…</div>` : ''}
-        </div>
+        <p class="py-2 text-sm text-gray-600">Vendedoras sin cuenta de RservasRoma que se registraron gratis en RomaHub.</p>
+        ${filasReportes ? `
+            <h3 class="pt-2 text-sm font-semibold text-gray-900">Reportes sin revisar</h3>
+            <ul class="divide-y divide-gray-200 mb-2">${filasReportes}</ul>
+        ` : ''}
+        <h3 class="pt-2 text-sm font-semibold text-gray-900">Tiendas</h3>
+        <ul class="divide-y divide-gray-200">${filasTiendas || '<li class="py-2 text-sm text-gray-600">Ninguna tienda externa todavía.</li>'}</ul>
+        ${tiendasExternas.length > 30 ? `<p class="py-2 text-sm text-gray-600">y ${tiendasExternas.length - 30} más…</p>` : ''}
     `;
 }
 
@@ -2131,16 +2113,6 @@ async function cargarTicketsSoporte() {
         return [];
     }
 }
-
-let soporteAbierto = (() => {
-    try { return localStorage.getItem('soporteAbierto') === 'true'; } catch (e) { return false; }
-})();
-
-window.alternarSoporte = function() {
-    soporteAbierto = !soporteAbierto;
-    try { localStorage.setItem('soporteAbierto', String(soporteAbierto)); } catch (e) {}
-    renderHeader();
-};
 
 function fechaSoporte(iso) {
     if (!iso) return '';
@@ -2184,218 +2156,294 @@ function responderTicketSoporte(id) {
 function tarjetaTicketSoporte(ticket) {
     const esNuevo = ticket.estado === 'nuevo';
     const resuelto = ticket.estado === 'resuelto';
-    const etiquetaOrigen = ticket.origen === 'clientas'
-        ? '<span class="px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 text-[10px] font-bold">Clienta</span>'
-        : '<span class="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-bold">Dueña</span>';
-
     return `
-        <div class="border ${esNuevo ? 'border-rose-300 bg-rose-50/60' : 'border-gray-200 bg-white'} rounded-xl p-3 mb-2 last:mb-0">
+        <li class="py-3">
             <div class="flex flex-wrap items-center gap-1.5 mb-1">
-                ${esNuevo ? '<span class="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-bold">NUEVO</span>' : ''}
-                ${resuelto ? '<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">Resuelto</span>' : ''}
-                ${etiquetaOrigen}
-                ${ticket.con_foto ? '<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">📷 Con foto en el chat</span>' : ''}
-                <span class="text-[11px] text-gray-500">${escapeHtml(fechaSoporte(ticket.created_at))}</span>
+                ${esNuevo ? chip('Sin leer', 'rojo') : ''}
+                ${resuelto ? chip('Resuelto', 'verde') : ''}
+                ${chip(ticket.origen === 'clientas' ? 'Clienta' : 'Dueña', 'gris')}
+                ${ticket.con_foto ? chip('Trae foto en el chat', 'ambar') : ''}
+                <span class="text-sm text-gray-600">${escapeHtml(fechaSoporte(ticket.created_at))}</span>
             </div>
-            <p class="text-sm font-bold text-gray-800">${escapeHtml(ticket.negocio_nombre || '(sin negocio)')}
-                <span class="font-normal text-xs text-gray-500">${escapeHtml(ticket.negocio_slug || '')}</span>
+            <p class="font-medium text-gray-900 break-words">${escapeHtml(ticket.negocio_nombre || '(sin salón)')}
+                <span class="font-normal text-sm text-gray-600">${escapeHtml(ticket.negocio_slug || '')}</span>
             </p>
-            <p class="text-[11px] text-gray-500 mb-1.5">${escapeHtml(ticket.quien || '')}${ticket.contacto ? ' · ' + escapeHtml(ticket.contacto) : ' · sin teléfono'}${ticket.plataforma ? ' · ' + escapeHtml(ticket.plataforma) : ''}</p>
-            <p class="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">${escapeHtml(ticket.mensaje || '')}</p>
-            <div class="flex flex-wrap gap-1.5 mt-2.5">
-                <button onclick="responderTicketSoporte(${jsArg(ticket.id)})" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">💬 Responder</button>
+            <p class="text-sm text-gray-600 mb-1.5 break-words">${escapeHtml(ticket.quien || '')}${ticket.contacto ? ' · ' + escapeHtml(ticket.contacto) : ' · sin teléfono'}${ticket.plataforma ? ' · ' + escapeHtml(ticket.plataforma) : ''}</p>
+            <p class="text-sm text-gray-900 whitespace-pre-wrap break-words leading-relaxed">${escapeHtml(ticket.mensaje || '')}</p>
+            <div class="flex flex-wrap gap-2 mt-2.5">
+                <button type="button" onclick="responderTicketSoporte(${jsArg(ticket.id)})" class="${BTN_PRI}">Responder</button>
                 ${resuelto
-                    ? `<button onclick="marcarTicketSoporte(${jsArg(ticket.id)}, 'leido')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold">Reabrir</button>`
-                    : `<button onclick="marcarTicketSoporte(${jsArg(ticket.id)}, 'resuelto')" class="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-bold">Resuelto</button>`}
+                    ? `<button type="button" onclick="marcarTicketSoporte(${jsArg(ticket.id)}, 'leido')" class="${BTN_SEC}">Reabrir</button>`
+                    : `<button type="button" onclick="marcarTicketSoporte(${jsArg(ticket.id)}, 'resuelto')" class="${BTN_SEC}">Marcar resuelto</button>`}
             </div>
-        </div>
+        </li>
     `;
 }
 
 function renderSeccionSoporte() {
     if (!ticketsSoporteData.length) return '';
-
     const pendientes = ticketsSoporteData.filter(t => t.estado !== 'resuelto');
-    const nuevos = ticketsSoporteData.filter(t => t.estado === 'nuevo');
-    // Con pendientes se abre sola: un ticket sin leer no puede depender de que
-    // uno se acuerde de pulsar un boton.
-    const abierto = soporteAbierto || pendientes.length > 0;
-    const listado = abierto
-        ? (pendientes.length ? pendientes : ticketsSoporteData.slice(0, 10)).map(tarjetaTicketSoporte).join('')
-        : '';
-
-    const cabecera = pendientes.length
-        ? `<span class="font-bold text-rose-800 text-sm">🆘 Soporte: ${pendientes.length} sin resolver${nuevos.length ? ` (${nuevos.length} sin leer)` : ''}</span>`
-        : '<span class="font-bold text-gray-700 text-sm">🆘 Soporte: todo resuelto</span>';
-
+    const resueltos = ticketsSoporteData.filter(t => t.estado === 'resuelto').slice(0, 10);
     return `
-        <div class="mb-6 bg-white rounded-xl shadow overflow-hidden border-2 ${pendientes.length ? 'border-rose-300' : 'border-gray-200'}">
-            <div class="${pendientes.length ? 'bg-rose-50' : 'bg-gray-50'} px-4 py-2.5 border-b ${pendientes.length ? 'border-rose-100' : 'border-gray-100'} flex flex-wrap items-center justify-between gap-2">
-                <div>
-                    ${cabecera}
-                    <p class="text-xs ${pendientes.length ? 'text-rose-700' : 'text-gray-500'} mt-0.5">Mensajes del botón de soporte de las apps. Quedan aquí aunque el WhatsApp no llegue a enviarse.</p>
-                </div>
-                ${pendientes.length
-                    ? ''
-                    : `<button onclick="alternarSoporte()" class="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-bold">${soporteAbierto ? 'Ocultar' : 'Ver últimos'}</button>`}
-            </div>
-            ${listado ? `<div class="px-4 py-3">${listado}</div>` : ''}
-        </div>
+        <p class="py-2 text-sm text-gray-600">Mensajes del botón de soporte de las apps. Quedan aquí aunque el WhatsApp no llegue a enviarse.</p>
+        ${pendientes.length ? `<ul class="divide-y divide-gray-200">${pendientes.map(tarjetaTicketSoporte).join('')}</ul>` : ''}
+        ${resueltos.length ? `
+            <h3 class="pt-3 text-sm font-semibold text-gray-900">Resueltos hace poco</h3>
+            <ul class="divide-y divide-gray-200">${resueltos.map(tarjetaTicketSoporte).join('')}</ul>` : ''}
     `;
 }
 
+// ==================== BANDEJA "HOY" ====================
+// Lo que hay que atender hoy, junto y en filas iguales. Antes estaba repartido
+// en cinco secciones con formatos distintos, y en el movil habia que bajar
+// mucho para verlo. Un salon sale una sola vez, con su motivo mas urgente.
+let bandejaCompleta = false;
+window.verBandejaCompleta = function() {
+    bandejaCompleta = !bandejaCompleta;
+    renderHeader();
+};
+
+function calcularBandejaHoy() {
+    const filas = [];
+    const vistos = new Set();
+    const agregar = fila => {
+        if (fila.negocioId) {
+            if (vistos.has(fila.negocioId)) return;
+            vistos.add(fila.negocioId);
+        }
+        filas.push(fila);
+    };
+    const salones = negociosData.filter(n =>
+        n.es_tienda_externa !== true && n.archivado !== true && !eliminadosLocal.includes(n.id));
+
+    ticketsSoporteData.filter(t => t.estado !== 'resuelto').forEach(t => agregar({
+        peso: t.estado === 'nuevo' ? 0 : 1,
+        tipo: 'Soporte', tono: 'rojo',
+        titulo: t.negocio_nombre || '(sin salón)',
+        detalle: `${t.estado === 'nuevo' ? 'Sin leer · ' : ''}${fechaSoporte(t.created_at)} · ${recorte(t.mensaje, 110)}`,
+        acciones: [
+            `<button type="button" onclick="marcarTicketSoporte(${jsArg(t.id)}, 'resuelto')" class="${BTN_SEC}">Resuelto</button>`,
+            `<button type="button" onclick="responderTicketSoporte(${jsArg(t.id)})" class="${BTN_PRI}">Responder</button>`,
+        ],
+    }));
+
+    // Cobros: solo lo de hoy y mañana, y lo que vencio esta semana (aun se
+    // recupera). Lo mas viejo sigue en la seccion Cobros.
+    const { bloqueados, porCobrar } = calcularCobros(salones);
+    bloqueados.filter(i => i.motivo === 'vencida' && i.dias >= -7).forEach(i => agregar({
+        peso: 2, tipo: 'Cobro', tono: 'rojo', negocioId: i.n.id, titulo: i.n.nombre,
+        detalle: i.dias === 0
+            ? 'Vence hoy: ya no puede entrar a su panel'
+            : `Venció hace ${-i.dias} ${-i.dias === 1 ? 'día' : 'días'}: no puede entrar a su panel`,
+        acciones: [enlaceWhatsApp(i.n), botonRegistrarPago(i.n)],
+    }));
+    porCobrar.filter(i => i.dias === 1).forEach(i => agregar({
+        peso: 3, tipo: 'Cobro', tono: 'ambar', negocioId: i.n.id, titulo: i.n.nombre,
+        detalle: 'Vence mañana',
+        acciones: [enlaceWhatsApp(i.n), botonRegistrarPago(i.n)],
+    }));
+
+    calcularSalud(salones).criticos.filter(c => c.n.estado_suscripcion === 'activa').forEach(c => agregar({
+        peso: 4, tipo: 'No recibe citas', tono: 'rojo', negocioId: c.n.id, titulo: c.n.nombre,
+        detalle: `Paga y no puede recibir reservas: ${c.problemas.join(', ')}`,
+        acciones: [enlaceWhatsApp(c.n)],
+    }));
+
+    salones.forEach(n => {
+        const auditoria = window.obtenerAuditoriaComercial?.(n.id);
+        if (!auditoria || auditoria.isExternalStore) return;
+        const seguimiento = window.obtenerSeguimientoComercial?.(n.id) || {};
+        if ((seguimiento.prioridad_manual || auditoria.priority) !== 'P0') return;
+        agregar({
+            peso: 5, tipo: 'Retención', tono: 'morado', negocioId: n.id, titulo: n.nombre,
+            detalle: `${auditoria.diagnosis}. ${auditoria.action}.`,
+            acciones: [
+                enlaceWhatsApp(n),
+                `<button type="button" onclick="abrirSeguimientoComercial(${jsArg(n.id)})" class="${BTN_PRI}">Seguimiento</button>`,
+            ],
+        });
+    });
+
+    tiendasPorAprobarData.forEach(t => agregar({
+        peso: 6, tipo: 'RomaHub', tono: 'ambar', titulo: t.nombre,
+        detalle: `Tienda esperando aprobación · ${(t.productos || []).length + (t.cursos || []).length} artículos`,
+        acciones: [`<button type="button" onclick="abrirSeccion('tiendas')" class="${BTN_PRI}">Revisar</button>`],
+    }));
+
+    return filas.sort((a, b) => a.peso - b.peso);
+}
+
+function filaBandeja(fila) {
+    return `
+        <li class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-3">
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 min-w-0">
+                    ${chip(fila.tipo, fila.tono)}
+                    <span class="font-medium text-gray-900 truncate">${escapeHtml(fila.titulo || '(sin nombre)')}</span>
+                </div>
+                <p class="mt-1 text-sm text-gray-600 break-words">${escapeHtml(fila.detalle)}</p>
+            </div>
+            <div class="flex flex-wrap gap-2 sm:shrink-0">${fila.acciones.filter(Boolean).join('')}</div>
+        </li>`;
+}
+
+function renderBandejaHoy() {
+    const filas = calcularBandejaHoy();
+    const LIMITE = 8;
+    const mostradas = bandejaCompleta ? filas : filas.slice(0, LIMITE);
+    const cargando = !actividadReservasCargada;
+    const cuerpo = filas.length
+        ? `<ul class="divide-y divide-gray-200">${mostradas.map(filaBandeja).join('')}</ul>
+           ${filas.length > LIMITE ? `<button type="button" onclick="verBandejaCompleta()" class="${BTN_TEXTO} mt-1 -ml-3">${bandejaCompleta ? 'Ver menos' : `Ver las ${filas.length}`}</button>` : ''}`
+        : `<p class="py-3 text-sm text-gray-600">${cargando
+            ? 'Cargando lo pendiente…'
+            : 'Nada urgente: no hay mensajes sin responder, cobros de hoy ni salones de pago sin funcionar.'}</p>`;
+    return `
+        <section class="${UI.panel} mb-4" aria-labelledby="titulo-hoy">
+            <div class="flex items-baseline justify-between gap-3 px-4 pt-3">
+                <h2 id="titulo-hoy" class="text-base font-semibold text-gray-900">Hoy</h2>
+                <span class="text-sm text-gray-600">${filas.length ? `${filas.length} por atender` : ''}</span>
+            </div>
+            <div class="px-4 pb-3">${cuerpo}</div>
+        </section>`;
+}
+
 function renderHeader() {
-    // Las tiendas RomaHub tienen su propio conteo en renderTiendasPorAprobar/
-    // renderSeccionRomaHub: aqui solo entran negocios de RservasRoma, para que
-    // "Todos" y las estadisticas no se inflen con tiendas gratis sin agenda.
+    // Las tiendas RomaHub tienen su propia seccion: aqui solo entran negocios de
+    // RservasRoma, para que los numeros no se inflen con tiendas gratis.
     const negociosRservasRoma = negociosData.filter(n => n.es_tienda_externa !== true);
-    const stats = calcularEstadisticas(negociosRservasRoma);
-    // Los contadores tienen que cuadrar con lo que enseña cada filtro, y los
-    // filtros ya no muestran archivados: si no, "Todos (379)" abriria 306.
+    const stats = calcularEstadisticas(negociosRservasRoma.filter(n => n.archivado !== true));
+    // Los contadores tienen que cuadrar con lo que ensena cada filtro, y los
+    // filtros no muestran archivados.
     const visibles = negociosRservasRoma.filter(n => n.archivado !== true);
     const totalPorEstado = {
         todos: visibles.length,
         activa: visibles.filter(n => n.estado_suscripcion === 'activa').length,
-        suspendida: visibles.filter(n => n.estado_suscripcion === 'suspendida').length,
         trial: visibles.filter(n => n.estado_suscripcion === 'trial').length,
+        suspendida: visibles.filter(n => n.estado_suscripcion === 'suspendida').length,
         pendiente: visibles.filter(n => pendientesLocal.includes(n.id)).length,
         inactiva: visibles.filter(n => n.estado_suscripcion === 'inactiva').length,
         eliminados: visibles.filter(n => eliminadosLocal.includes(n.id)).length,
         archivados: negociosRservasRoma.filter(n => n.archivado === true).length
     };
-    
-    // Obtener la fecha actual formateada
-    const fechaActual = new Date().toLocaleDateString('es-ES', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    });
-    
+
+    const fechaActual = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    const horaDatos = datosActualizadosEn
+        ? `datos de las ${datosActualizadosEn.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+        : 'cargando datos…';
+
+    const kpi = (valor, etiqueta) => `
+        <div class="bg-white px-3 py-2.5">
+            <dt class="text-xs text-gray-600">${etiqueta}</dt>
+            <dd class="mt-0.5 text-lg font-semibold text-gray-900 tabular-nums">${valor}</dd>
+        </div>`;
+
+    const filtro = (clave, etiqueta) => `
+        <button type="button" data-filtro="${clave}" aria-pressed="${filtroActual === clave}" onclick="filtrarPorEstado('${clave}')"
+            class="inline-flex items-center gap-1 shrink-0 rounded-full border px-3 min-h-11 md:min-h-9 text-sm font-medium ${filtroActual === clave ? CHIP_FILTRO_ON.join(' ') : CHIP_FILTRO_OFF.join(' ')}">
+            ${etiqueta} <span class="tabular-nums opacity-80">${totalPorEstado[clave]}</span>
+        </button>`;
+
+    const filtroComercialActivo = window.hayFiltroComercialActivo ? window.hayFiltroComercialActivo() : false;
+
+    const { bloqueados, porCobrar } = calcularCobros(visibles);
+    const salud = calcularSalud(visibles);
+    const ticketsPendientes = ticketsSoporteData.filter(t => t.estado !== 'resuelto').length;
+    const reportesPendientes = reportesTiendaData.filter(r => r.estado === 'pendiente').length;
+    const tiendasExternas = negociosData.filter(n => n.es_tienda_externa === true).length;
+
     const headerHtml = `
-        <div class="max-w-7xl mx-auto p-4 md:p-6">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <div>
-                    <h1 class="text-2xl font-bold">👑 Super Admin Panel</h1>
-                    <p class="text-gray-600 text-sm">Gestión de negocios Rservas</p>
+        <header class="bg-white border-b border-gray-200">
+            <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <h1 class="text-lg font-semibold text-gray-900">SuperAdmin RservasRoma</h1>
+                    <p class="text-sm text-gray-600">${fechaActual} · ${horaDatos}</p>
                 </div>
-                <div class="flex gap-2 flex-wrap">
-                    <button onclick="exportarCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition">📥 Exportar CSV</button>
-                    <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">🔄 Recargar</button>
-                    <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition">🚪 Cerrar Sesión</button>
-                </div>
-            </div>
-            
-            <div class="mb-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl shadow-lg overflow-hidden">
-                <div class="px-6 py-5">
-                    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div class="flex items-center gap-3">
-                            <div class="text-4xl md:text-5xl">📅</div>
-                            <div>
-                                <p class="text-purple-100 text-sm">RESERVAS SACADAS HOY</p>
-                                <p class="text-white text-xs opacity-80">${fechaActual}</p>
-                            </div>
-                        </div>
-                        <div class="text-center">
-                            <div class="reservas-diarias-number text-5xl md:text-7xl font-bold text-white drop-shadow-lg">
-                                ${reservasDiarias ?? '—'}
-                            </div>
-                            <p class="text-purple-100 text-sm mt-1">reservas en total</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-purple-100 text-xs">📊 Última actualización</p>
-                            <p class="text-white text-sm">${datosActualizadosEn ? datosActualizadosEn.toLocaleTimeString() : '—'}</p>
-                        </div>
-                    </div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="location.reload()" class="${BTN_SEC}">Recargar</button>
+                    ${menuDesplegable('Más', `
+                        <p class="px-3 pt-1 text-xs font-semibold text-gray-600">Avisos a las apps</p>
+                        ${itemMenu('Notificar a todos los salones', 'notificarATodos(this)')}
+                        <button type="button" role="menuitem" onclick="notificarTurnosHoy()" class="${ITEM_MENU}">Enviar a cada salón sus citas de hoy</button>
+                        <button type="button" role="menuitem" onclick="notificarTurnosManana()" class="${ITEM_MENU}">Enviar a cada salón sus citas de mañana</button>
+                        <div role="separator" class="my-1 border-t border-gray-200"></div>
+                        ${itemMenu('Exportar lista a CSV', 'exportarCSV()')}
+                        ${itemMenu('Cerrar sesión', 'logout()')}
+                    `, { ancho: 'w-72' })}
                 </div>
             </div>
+        </header>
 
-            ${avisoErrorCarga('soporte')}${renderSeccionSoporte()}
-            ${avisoErrorCarga('tiendas')}${renderTiendasPorAprobar()}
-            ${avisoErrorCarga('reportes')}${renderSeccionRomaHub()}
+        <div class="max-w-6xl mx-auto px-4 pt-4">
+            <dl class="mb-4 grid grid-cols-3 md:grid-cols-6 gap-px overflow-hidden rounded-lg border border-gray-200 bg-gray-200">
+                ${kpi(reservasDiarias ?? '—', 'Citas sacadas hoy')}
+                ${kpi(stats.reservasMes, 'Citas este mes')}
+                ${kpi(stats.activos, 'Activos')}
+                ${kpi(stats.trial, 'En prueba')}
+                ${kpi(stats.suspendidos, 'Suspendidos')}
+                ${kpi(stats.porVencer, 'Vencen en 7 días')}
+            </dl>
 
-            ${renderEmbudoPlegable()}
+            ${renderBandejaHoy()}
 
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-gray-800">${stats.total}</div>
-                    <div class="text-gray-600 text-xs">Total Negocios</div>
-                </div>
-                <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-green-600">${stats.activos}</div>
-                    <div class="text-gray-600 text-xs">🟢 Activos</div>
-                </div>
-                <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-red-600">${stats.suspendidos}</div>
-                    <div class="text-gray-600 text-xs">🔴 Suspendidos</div>
-                </div>
-                <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-yellow-600">${stats.trial}</div>
-                    <div class="text-gray-600 text-xs">🟡 En Prueba</div>
-                </div>
-                <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-purple-600">${stats.reservasMes}</div>
-                    <div class="text-gray-600 text-xs">📅 Reservas (mes)</div>
-                </div>
-                <div class="bg-white p-3 rounded-lg shadow text-center">
-                    <div class="text-2xl font-bold text-orange-600">${stats.porVencer}</div>
-                    <div class="text-gray-600 text-xs">⚠️ Vencen 7d</div>
-                </div>
-            </div>
-            
+            ${avisoErrorCarga('soporte')}${avisoErrorCarga('tiendas')}${avisoErrorCarga('reportes')}
+
             <div class="mb-4">
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
+                ${ticketsSoporteData.length ? panelPlegable('soporte', 'Soporte',
+                    ticketsPendientes ? `${ticketsPendientes} sin resolver` : 'Todo resuelto',
+                    renderSeccionSoporte(), ticketsPendientes > 0) : ''}
+                ${tiendasPorAprobarData.length ? panelPlegable('tiendas', 'Tiendas por aprobar',
+                    `${tiendasPorAprobarData.length} esperando revisión`, renderTiendasPorAprobar(), true) : ''}
+                ${panelPlegable('cobros', 'Cobros',
+                    `${bloqueados.length} bloqueados · ${porCobrar.length} por cobrar esta semana`,
+                    renderSeccionCobros(), bloqueados.length > 0)}
+                ${salud.totalConProblemas ? panelPlegable('salud', 'Salones que necesitan ayuda',
+                    `${salud.criticos.length} urgentes · ${salud.totalConProblemas} con algo pendiente`,
+                    renderSeccionSalud()) : ''}
+                ${(tiendasExternas || reportesPendientes) ? panelPlegable('romahub', 'RomaHub',
+                    `${tiendasExternas} tiendas${reportesPendientes ? ` · ${reportesPendientes} reportes sin revisar` : ''}`,
+                    renderSeccionRomaHub(), reportesPendientes > 0) : ''}
+                ${panelPlegable('embudo', 'Embudo comercial', 'Retención, cierre y activación',
+                    window.renderEmbudoComercial ? window.renderEmbudoComercial() : '')}
+            </div>
+
+            <section aria-label="Buscar y filtrar salones" class="mb-3">
+                <div class="flex flex-col md:flex-row gap-2">
+                    <div class="relative flex-1">
+                        <label for="buscador" class="sr-only">Buscar salón por nombre o teléfono</label>
+                        <svg aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <input type="search" id="buscador" value="${escapeHtml(textoBuscador)}"
+                               placeholder="Buscar por nombre o teléfono (tecla /)"
+                               class="w-full rounded-md border border-gray-300 bg-white pl-10 pr-3 min-h-11 md:min-h-10 text-base md:text-sm text-gray-900 placeholder:text-gray-500 focus:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                               oninput="buscarNegocio(this.value)" autocomplete="off">
                     </div>
-                    <input type="text" 
-                           id="buscador" 
-                           value="${escapeHtml(textoBuscador)}"
-                           aria-label="Buscar salón por nombre o teléfono"
-                           placeholder="🔍 Buscar por nombre o teléfono..."
-                           class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-base"
-                           oninput="buscarNegocio(this.value)"
-                           autocomplete="off">
+                    <label for="orden" class="sr-only">Ordenar por</label>
+                    <select id="orden" onchange="cambiarOrden(this.value)"
+                        class="rounded-md border border-gray-300 bg-white px-3 min-h-11 md:min-h-10 text-sm text-gray-900 focus:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-200">
+                        <option value="reservas" ${ordenActual === 'reservas' ? 'selected' : ''}>Más citas este mes</option>
+                        <option value="semana" ${ordenActual === 'semana' ? 'selected' : ''}>Más citas en 7 días</option>
+                        <option value="comercial" ${ordenActual === 'comercial' ? 'selected' : ''}>Prioridad comercial</option>
+                        <option value="fecha" ${ordenActual === 'fecha' ? 'selected' : ''}>Más recientes</option>
+                    </select>
                 </div>
-                <p class="text-xs text-gray-400 mt-1">💡 Busca por nombre o cualquier parte del teléfono</p>
-            </div>
-            
-            <div class="mb-4 flex flex-wrap gap-3 items-center">
-                <span class="text-sm text-gray-500 font-medium">Ordenar por:</span>
-                <button id="order-comercial" onclick="cambiarOrden('comercial')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">🎯 Prioridad comercial</button>
-                <button id="order-semana" onclick="cambiarOrden('semana')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">Ultima semana</button>
-                <button id="order-reservas" onclick="cambiarOrden('reservas')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-purple-600 text-white">🏆 Más reservas</button>
-                <button id="order-fecha" onclick="cambiarOrden('fecha')" class="order-btn px-4 py-2 rounded-lg text-sm transition bg-gray-200 text-gray-700">📅 Más recientes</button>
-            </div>
-            
-            <div class="mb-6 flex flex-wrap gap-3 items-center justify-between">
-                <div class="flex gap-2 flex-wrap">
-                    <button onclick="notificarATodos(this)" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg text-sm transition">📢 Notificar a TODOS</button>
-                    <button onclick="notificarTurnosHoy()" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm transition font-bold">Turnos Hoy</button>
-                    <button onclick="notificarTurnosManana()" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm transition font-bold">🔔 Turnos Mañana</button>
+                <div role="group" aria-label="Filtrar por estado" class="mt-2 -mx-4 px-4 flex gap-2 overflow-x-auto pb-1 md:mx-0 md:px-0 md:flex-wrap md:overflow-visible">
+                    ${filtro('todos', 'Todos')}
+                    ${filtro('activa', 'Activos')}
+                    ${filtro('trial', 'En prueba')}
+                    ${filtro('suspendida', 'Suspendidos')}
+                    ${filtro('pendiente', 'Marcados')}
+                    ${filtro('inactiva', 'Bajas')}
+                    ${filtro('eliminados', 'Ocultos')}
+                    ${filtro('archivados', 'Archivados')}
                 </div>
-                <span class="text-xs text-gray-500">💰 ${PRECIO_MENSUAL} CUP/mes | ⏱️ +${DIAS_POR_DEFECTO} días</span>
-            </div>
-            
-            ${renderSeccionCobros()}
-
-            ${renderSeccionSalud()}
-
-            <div class="flex gap-2 flex-wrap mb-6 border-b pb-4">
-                <button id="filtro-todos" onclick="filtrarPorEstado('todos')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white">📋 Todos (${totalPorEstado.todos})</button>
-                <button id="filtro-activa" onclick="filtrarPorEstado('activa')" class="px-3 py-1.5 rounded-lg text-sm bg-green-100 text-green-700">🟢 Activos (${totalPorEstado.activa})</button>
-                <button id="filtro-suspendida" onclick="filtrarPorEstado('suspendida')" class="px-3 py-1.5 rounded-lg text-sm bg-red-100 text-red-700">🔴 Suspendidos (${totalPorEstado.suspendida})</button>
-                <button id="filtro-trial" onclick="filtrarPorEstado('trial')" class="px-3 py-1.5 rounded-lg text-sm bg-yellow-100 text-yellow-700">🟡 Prueba (${totalPorEstado.trial})</button>
-                <button id="filtro-pendiente" onclick="filtrarPorEstado('pendiente')" class="px-3 py-1.5 rounded-lg text-sm bg-purple-100 text-purple-700">👀 Pendientes (${totalPorEstado.pendiente})</button>
-                <button id="filtro-inactiva" onclick="filtrarPorEstado('inactiva')" class="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700">⚫ Bajas (${totalPorEstado.inactiva})</button>
-                <button id="filtro-eliminados" onclick="filtrarPorEstado('eliminados')" class="px-3 py-1.5 rounded-lg text-sm bg-pink-100 text-pink-700">🗑️ Eliminados (${totalPorEstado.eliminados})</button>
-                <button id="filtro-archivados" onclick="filtrarPorEstado('archivados')" class="px-3 py-1.5 rounded-lg text-sm bg-slate-100 text-slate-700">📦 Archivados (${totalPorEstado.archivados})</button>
-            </div>
+                ${filtroComercialActivo ? `
+                    <p class="mt-2 text-sm text-purple-800">Mostrando un grupo del embudo comercial.
+                        <button type="button" onclick="limpiarFiltroComercial()" class="underline underline-offset-2 font-medium">Ver todos</button>
+                    </p>` : ''}
+            </section>
         </div>
     `;
-    
+
     // renderHeader se repite al terminar cada carga de fondo. Recrear el
     // buscador sin su valor ni su foco borraba lo que se estaba escribiendo
     // (y la lista seguia filtrada con el campo vacio).
@@ -2413,164 +2461,139 @@ function renderHeader() {
 }
 
 // ==================== RENDERIZADO DE LISTA ====================
-function renderListaNegocios(negocios) {
-    let html = `<div class="max-w-7xl mx-auto p-4 md:p-6 pt-0">`;
-    
+// La lista se pinta de 30 en 30: con ~450 salones de golpe el movil se
+// arrastraba y habia unos 5.000 puntos de tabulacion.
+const PAGINA_LISTA = 30;
+let limiteLista = PAGINA_LISTA;
+window.verMasNegocios = function() {
+    limiteLista += PAGINA_LISTA;
+    actualizarListaNegocios();
+};
+
+function tarjetaNegocio(n, posicion) {
+    const [estadoTexto, estadoTono] = ESTADO_SUSCRIPCION[n.estado_suscripcion] || ESTADO_SUSCRIPCION.activa;
+    const reservasHoy = getReservasDiariasPorNegocio(n.id);
+    const reservasSemana = getReservasSemanaPorNegocio(n.id);
+    const esPendiente = pendientesLocal.includes(n.id);
+    const esEliminado = eliminadosLocal.includes(n.id);
+    const ultimoContacto = getUltimaVezTexto(n.id, 'ultima');
+    const urlNegocio = normalizarUrlNegocio(n);
+
+    // Se escapa ANTES de resaltar: nombre y telefono los escribe la duena,
+    // y el <mark> es lo unico que debe llegar como HTML.
+    let nombreMostrado = escapeHtml(n.nombre || 'Sin nombre');
+    let telefonoMostrado = escapeHtml(n.telefono || 'Sin teléfono');
     if (filtroBusqueda) {
-        html += `<div class="mb-3 text-sm text-gray-500">🔍 Resultados para: "${escapeHtml(filtroBusqueda)}" (${negocios.length} encontrados)</div>`;
+        const regex = new RegExp(`(${escapeHtml(filtroBusqueda).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        nombreMostrado = nombreMostrado.replace(regex, '<mark class="bg-yellow-200 text-yellow-950 rounded px-0.5">$1</mark>');
+        if (n.telefono) telefonoMostrado = telefonoMostrado.replace(regex, '<mark class="bg-yellow-200 text-yellow-950 rounded px-0.5">$1</mark>');
     }
-    
-    html += `<div class="grid gap-4">`;
-    
-    if (negocios.length === 0) {
-        html += `<div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-                    <div class="text-5xl mb-3">🔍</div>
-                    <p class="text-lg">No se encontraron negocios</p>
-                    <button onclick="limpiarBusqueda()" class="mt-3 text-purple-600 hover:text-purple-800 underline">Limpiar búsqueda</button>
-                </div>`;
-    }
-    
-    negocios.forEach((n, index) => {
-        const fechaProximo = n.proximo_pago ? new Date(n.proximo_pago).toLocaleDateString() : 'No definido';
-        const fechaUltimo = n.fecha_ultimo_pago ? new Date(n.fecha_ultimo_pago).toLocaleDateString() : 'No registrado';
-        const diasRestantes = n.dias_para_renovar || 0;
-        const reservasHoy = getReservasDiariasPorNegocio(n.id);
-        const reservasSemanaNegocio = getReservasSemanaPorNegocio(n.id);
-        const esPendiente = pendientesLocal.includes(n.id);
-        const esEliminado = eliminadosLocal.includes(n.id);
-        const ultimoSoporte = getUltimaVezTexto(n.id, 'soporte');
-        const ultimoHola = getUltimaVezTexto(n.id, 'hola');
-        const urlNegocio = normalizarUrlNegocio(n);
-        const urlLabel = urlNegocio ? escapeHtml(getUrlLabel(urlNegocio)) : '';
-        
-        const estadoConfig = {
-            'activa': { color: 'border-green-500', text: '🟢 Activo', bg: 'bg-green-100 text-green-700' },
-            'suspendida': { color: 'border-red-500', text: '🔴 Suspendido', bg: 'bg-red-100 text-red-700' },
-            'trial': { color: 'border-yellow-500', text: '🟡 Prueba', bg: 'bg-yellow-100 text-yellow-700' },
-            'inactiva': { color: 'border-gray-500', text: '⚫ Inactivo', bg: 'bg-gray-100 text-gray-700' },
-            'pendiente': { color: 'border-purple-500', text: '👀 Pendiente', bg: 'bg-purple-100 text-purple-700' }
-        };
-        const ec = estadoConfig[n.estado_suscripcion] || estadoConfig.activa;
-        
-        // Se escapa ANTES de resaltar: nombre y telefono los escribe la duena,
-        // y el <mark> es lo unico que debe llegar como HTML.
-        let nombreMostrado = escapeHtml(n.nombre || 'Sin nombre');
-        let telefonoMostrado = escapeHtml(n.telefono || 'No registrado');
 
-        if (filtroBusqueda) {
-            const regex = new RegExp(`(${escapeHtml(filtroBusqueda).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-            nombreMostrado = nombreMostrado.replace(regex, '<mark class="bg-yellow-200 px-0.5 rounded">$1</mark>');
-            if (n.telefono) {
-                telefonoMostrado = telefonoMostrado.replace(regex, '<mark class="bg-yellow-200 px-0.5 rounded">$1</mark>');
-            }
-        }
-        
-        // Mostrar un indicador visual si el negocio tiene muchas reservas
-        const posicionRanking = index + 1;
-        const esTopReservas = ordenActual === 'reservas' && index < 3 && Number(n.reservas_mes) > 0;
-        const medallaTop = esTopReservas ? (negocios.indexOf(n) === 0 ? '🥇 ' : (negocios.indexOf(n) === 1 ? '🥈 ' : '🥉 ')) : '';
-        
-        html += `
-            <div class="bg-white rounded-lg shadow border-l-4 ${ec.color} p-4 fade-in flex flex-col">
-                <div class="flex flex-col md:flex-row justify-between items-start gap-3">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2 flex-wrap">
-                            <h2 class="font-bold text-lg">${medallaTop}🏢 ${nombreMostrado}</h2>
-                            ${ordenActual === 'reservas' ? `<span class="px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700 font-bold">Lugar #${posicionRanking}</span>` : ''}
-                            <span class="px-2 py-1 rounded-full text-xs ${ec.bg} font-medium">${ec.text}</span>
-                            ${reservasHoy > 0 ? `<span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">📅 +${reservasHoy} hoy</span>` : ''}
-                            ${esEliminado ? `<span class="px-2 py-1 rounded-full text-xs bg-pink-100 text-pink-700 font-medium">🗑️ Eliminado</span>` : ''}
-                            ${badgeWizard(n)}
-                        </div>
-                        <p class="text-sm text-gray-600">📧 ${escapeHtml(n.email || 'No registrado')}</p>
-                        <p class="text-sm text-gray-600">📱 ${telefonoMostrado}</p>
-                        ${urlNegocio ? `<p class="text-sm text-gray-600"><a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline break-all">Abrir negocio (${urlLabel})</a></p>` : ''}
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-4 text-sm border-t pt-3">
-                    <div class="text-center">
-                        <div class="text-gray-500 text-xs">📊 Reservas (mes)</div>
-                        <div class="font-bold text-lg ${Number(n.reservas_mes) > 0 ? 'text-purple-600' : 'text-gray-400'}">${n.reservas_mes || 0}</div>
-                        ${ordenActual === 'reservas' ? `<div class="text-xs text-purple-500 font-semibold">#${posicionRanking} en reservas</div>` : ''}
-                    </div>
-                    <div class="text-center">
-                        <div class="text-gray-500 text-xs">👥 Profesionales</div>
-                        <div class="font-bold text-lg">${n.profesionales_activas || 0}</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-gray-500 text-xs">📅 Antigüedad</div>
-                        <div class="font-bold text-lg">${n.dias_activo || 0} d</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-gray-500 text-xs">💰 Monto mensual</div>
-                        <div class="font-bold text-lg">${n.monto_ultimo_pago || PRECIO_MENSUAL}</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-gray-500 text-xs">🔥 Reservas hoy</div>
-                        <div class="font-bold text-lg ${reservasHoy > 0 ? 'text-orange-500' : 'text-gray-400'}">${actividadReservasCargada ? reservasHoy : '—'}</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-gray-500 text-xs">Últ. 7 días</div>
-                        <div class="font-bold text-lg ${reservasSemanaNegocio > 0 ? 'text-emerald-600' : 'text-gray-400'}">${actividadReservasCargada ? reservasSemanaNegocio : '—'}</div>
-                    </div>
-                </div>
-                
-                <div class="flex flex-col md:flex-row justify-between text-xs mt-3 text-gray-500 gap-2 pb-3 border-b">
-                    <div>💳 Último pago: ${fechaUltimo}</div>
-                    <div class="${diasRestantes <= 3 && n.estado_suscripcion === 'activa' ? 'text-red-600 font-bold' : ''}">⏰ Próximo pago: ${fechaProximo} ${diasRestantes > 0 ? `(faltan ${diasRestantes} días)` : diasRestantes < 0 ? '(VENCIDO)' : ''}</div>
-                </div>
+    const fechaPago = fechaPagoDe(n);
+    const dias = fechaPago && !esFechaHeredada(fechaPago) ? diasHastaPago(fechaPago) : null;
+    const pagoTexto = !fechaPago ? 'Sin fecha'
+        : dias == null ? _fechaCorta(fechaPago)
+        : dias < 0 ? `Venció hace ${-dias} d`
+        : dias === 0 ? 'Vence hoy'
+        : `${_fechaCorta(fechaPago)} · ${dias} d`;
 
-                ${window.renderFichaComercial ? window.renderFichaComercial(n) : ''}
+    const dato = (etiqueta, valor, clase = 'text-gray-900') => `
+        <div>
+            <dt class="text-xs text-gray-600">${etiqueta}</dt>
+            <dd class="text-sm font-semibold tabular-nums ${clase}">${valor}</dd>
+        </div>`;
+    const cargando = !actividadReservasCargada;
 
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <button onclick="window.togglePendiente(${jsArg(n.id)})" class="${esPendiente ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
-                        ${esPendiente ? '✔️ Quitar Pendiente' : '👀 Marcar Pendiente'}
-                    </button>
-                    ${n.estado_suscripcion === 'trial' ? `<button onclick="window.activarDesdeTrial(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">✅ Activar</button>` : ''}
-                    ${n.estado_suscripcion === 'suspendida' ? `<button onclick="window.reactivarNegocio(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">▶️ Reactivar</button>` : ''}
-                    ${n.estado_suscripcion === 'activa' ? `<button onclick="window.suspenderNegocio(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⏸️ Suspender</button>` : ''}
-                    
-                    <button onclick="window.abrirModalPagadoHasta(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${jsArg(n.proximo_pago)})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Pagado hasta</button>
+    // Accion principal segun el estado; el resto, en "Mas".
+    const principal = n.estado_suscripcion === 'trial'
+        ? `<button type="button" onclick="window.activarDesdeTrial(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="${BTN_PRI}">Activar</button>`
+        : n.estado_suscripcion === 'suspendida'
+            ? `<button type="button" onclick="window.reactivarNegocio(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="${BTN_PRI}">Reactivar</button>`
+            : '';
+    const pagadoHasta = `<button type="button" onclick="window.abrirModalPagadoHasta(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${jsArg(fechaPago || '')})" class="${principal ? BTN_SEC : BTN_PRI}">Pagado hasta</button>`;
 
-                    <div class="flex flex-col gap-1">
-                        <button onclick="window.enviarWhatsApp(${jsArg(n.telefono)}, ${jsArg(n.nombre)}, ${jsArg(n.id)})" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💬 Soporte</button>
-                        ${ultimoSoporte ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoSoporte}</span>` : ''}
-                    </div>
-                    
-                    <div class="flex flex-col gap-1">
-                        <button onclick="window.enviarWhatsAppSimple(${jsArg(n.telefono)}, ${jsArg(n.nombre)}, ${jsArg(n.id)})" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">💚 WhatsApp Hola</button>
-                        ${ultimoHola ? `<span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">${ultimoHola}</span>` : ''}
-                    </div>
+    const mas = menuDesplegable('Más', `
+        ${itemMenu('Mensaje de bienvenida', `window.generarMensajeCliente(${jsArg(n)})`)}
+        ${itemMenu('Saludo por WhatsApp', `window.enviarWhatsAppSimple(${jsArg(n.telefono)}, ${jsArg(n.nombre)}, ${jsArg(n.id)})`)}
+        ${itemMenu('Enviar notificación a la app', `window.notificarNegocio(${jsArg(n)})`)}
+        ${itemMenu('Aviso de vencimiento', `window.notificarVencimiento(${jsArg(n)})`)}
+        ${itemMenu(esPendiente ? 'Quitar marca' : 'Marcar para revisar', `window.togglePendiente(${jsArg(n.id)})`)}
+        ${itemMenu('Cambiar contraseña', `window.abrirModalCambiarPassword(${jsArg(n.id)}, ${jsArg(n.nombre)})`)}
+        ${n.estado_suscripcion === 'activa' ? itemMenu('Suspender', `window.suspenderNegocio(${jsArg(n.id)}, ${jsArg(n.nombre)})`) : ''}
+        ${itemMenu(n.archivado ? 'Restaurar de archivados' : 'Archivar', `window.alternarArchivadoNegocio(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${n.archivado === true})`)}
+        ${itemMenu(esEliminado ? 'Volver a mostrar' : 'Ocultar de la lista', `window.toggleEliminado(${jsArg(n.id)})`)}
+        <div role="separator" class="my-1 border-t border-gray-200"></div>
+        <p class="px-3 pt-1 text-xs font-semibold text-gray-600">Zona de peligro</p>
+        ${itemMenu('Reiniciar cuenta', `window.reiniciarNegocioCompleto(${jsArg(n.id)}, ${jsArg(n.nombre)})`, 'text-red-700')}
+        ${itemMenu('Borrar salón', `window.borrarNegocioCompleto(${jsArg(n.id)}, ${jsArg(n.nombre)})`, 'text-red-700')}
+    `);
 
-                    <button onclick="window.generarMensajeCliente(${jsArg(n)})" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Mensaje cliente</button>
-                    
-                    <button onclick="window.notificarNegocio(${jsArg(n)})" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">🔔 Notificar</button>
-                    
-                    <button onclick="window.notificarVencimiento(${jsArg(n)})" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">⚠️ Avisar Vencimiento</button>
-                    
-                    <button onclick="window.borrarNegocioCompleto(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Borrar Supabase</button>
-
-                    <button onclick="window.reiniciarNegocioCompleto(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Reiniciar cuenta</button>
-
-                    <button onclick="window.abrirModalCambiarPassword(${jsArg(n.id)}, ${jsArg(n.nombre)})" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">Cambiar contraseña</button>
-
-                    <button onclick="window.alternarArchivadoNegocio(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${n.archivado === true})" class="${n.archivado ? 'bg-slate-600 hover:bg-slate-700 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">${n.archivado ? '↩️ Restaurar' : '📦 Archivar'}</button>
-
-                    <button onclick="window.toggleEliminado(${jsArg(n.id)})" class="${esEliminado ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-100 text-pink-700 hover:bg-pink-200'} px-3 py-1.5 rounded-lg text-sm font-medium transition flex-1 md:flex-none text-center">
-                        ${esEliminado ? '👁️ Mostrar en Principal' : '🙈 Ocultar de Vista'}
-                    </button>
-                </div>
+    return `
+        <article class="${UI.panel} p-4">
+            <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-base font-semibold text-gray-900 break-words min-w-0">${nombreMostrado}</h2>
+                ${chip(estadoTexto, estadoTono)}
+                ${badgeWizard(n)}
+                ${reservasHoy > 0 ? chip(`+${reservasHoy} hoy`, 'morado') : ''}
+                ${esPendiente ? chip('Marcado', 'morado') : ''}
+                ${esEliminado ? chip('Oculto', 'gris') : ''}
             </div>
-        `;
-    });
-    
-    html += `</div></div>`;
-    
-    const listaNegocios = document.getElementById('lista-negocios');
-    if (listaNegocios) {
-        listaNegocios.innerHTML = html;
+            <p class="mt-1 text-sm text-gray-600 break-words">
+                ${telefonoMostrado} · ${escapeHtml(n.email || 'Sin email')}
+                ${urlNegocio ? ` · <a href="${escapeHtml(urlNegocio)}" target="_blank" rel="noopener noreferrer" class="inline-block py-3 -my-3 text-purple-800 underline underline-offset-2 hover:text-purple-900">Abrir app</a>` : ''}
+            </p>
+
+            <dl class="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-x-4 gap-y-2">
+                ${dato('Citas este mes', `${n.reservas_mes || 0}${ordenActual === 'reservas' && Number(n.reservas_mes) > 0 ? ` <span class="font-normal text-gray-600">#${posicion}</span>` : ''}`)}
+                ${dato('Últimos 7 días', cargando ? '—' : reservasSemana)}
+                ${dato('Sacadas hoy', cargando ? '—' : reservasHoy)}
+                ${dato('Profesionales', n.profesionales_activas || 0)}
+                ${dato('Antigüedad', `${n.dias_activo || 0} d`)}
+                ${dato('Próximo pago', pagoTexto, dias != null && dias <= 3 ? 'text-red-700' : 'text-gray-900')}
+            </dl>
+
+            ${window.renderFichaComercial ? window.renderFichaComercial(n) : ''}
+
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                ${principal}
+                ${pagadoHasta}
+                <button type="button" onclick="window.enviarWhatsApp(${jsArg(n.telefono)}, ${jsArg(n.nombre)}, ${jsArg(n.id)})" class="${BTN_SEC}">WhatsApp</button>
+                ${mas}
+                ${ultimoContacto ? `<span class="text-xs text-gray-600">${escapeHtml(ultimoContacto)}</span>` : ''}
+            </div>
+        </article>
+    `;
+}
+
+function renderListaNegocios(negocios) {
+    const mostrados = negocios.slice(0, limiteLista);
+    const quedan = negocios.length - mostrados.length;
+    let html = `<div class="max-w-6xl mx-auto px-4 pb-10">`;
+
+    html += `<p class="mb-2 text-sm text-gray-600" aria-live="polite">${negocios.length} ${negocios.length === 1 ? 'salón' : 'salones'}${filtroBusqueda ? ` para "${escapeHtml(textoBuscador.trim())}"` : ''}</p>`;
+
+    if (negocios.length === 0) {
+        html += `
+            <div class="${UI.panel} p-8 text-center">
+                <p class="text-base font-medium text-gray-900">No hay salones con este filtro</p>
+                <p class="mt-1 text-sm text-gray-600">Prueba con otra parte del nombre o del teléfono, o cambia el filtro de arriba.</p>
+                ${filtroBusqueda ? `<button type="button" onclick="limpiarBusqueda()" class="${BTN_SEC} mt-3">Limpiar búsqueda</button>` : ''}
+            </div>`;
     }
+
+    html += `<div class="grid gap-3">${mostrados.map((n, i) => tarjetaNegocio(n, i + 1)).join('')}</div>`;
+
+    if (quedan > 0) {
+        html += `
+            <div class="mt-4 flex justify-center">
+                <button type="button" onclick="verMasNegocios()" class="${BTN_SEC}">Ver ${Math.min(PAGINA_LISTA, quedan)} más (quedan ${quedan})</button>
+            </div>`;
+    }
+
+    html += `</div>`;
+
+    const listaNegocios = document.getElementById('lista-negocios');
+    if (listaNegocios) listaNegocios.innerHTML = html;
 }
 
 // ==================== FUNCIONES DE UI ====================
@@ -2635,7 +2658,7 @@ async function notificarTurnosPorFecha(diasAdelante = 1) {
     const esHoy = diasAdelante === 0;
     const etiquetaDia = esHoy ? 'hoy' : 'mañana';
     const selectorBoton = esHoy ? 'button[onclick="notificarTurnosHoy()"]' : 'button[onclick="notificarTurnosManana()"]';
-    const textoBotonFallback = esHoy ? 'Turnos Hoy' : '🔔 Turnos Mañana';
+    const textoBotonFallback = esHoy ? 'Enviar a cada salón sus citas de hoy' : 'Enviar a cada salón sus citas de mañana';
 
     // 1. Obtener todos los activos/trial
     const elegibles = negociosData.filter(n => n.estado_suscripcion === 'activa' || n.estado_suscripcion === 'trial');
@@ -2675,7 +2698,7 @@ async function notificarTurnosPorFecha(diasAdelante = 1) {
         if (error) throw error;
 
         if (!turnos || turnos.length === 0) {
-            alert(`No hay NINGÚN turno registrado para ${etiquetaDia} en todo el sistema.`);
+            alert(`No hay ninguna cita reservada para ${etiquetaDia} en todo el sistema.`);
             return;
         }
 
@@ -2690,11 +2713,11 @@ async function notificarTurnosPorFecha(diasAdelante = 1) {
         const negociosConTurnos = elegibles.filter(neg => turnosPorNegocio[neg.id] && turnosPorNegocio[neg.id].length > 0);
 
         if (negociosConTurnos.length === 0) {
-            alert(`Ninguno de los negocios activos tiene turnos para ${etiquetaDia}.`);
+            alert(`Ningún salón activo tiene citas para ${etiquetaDia}.`);
             return;
         }
 
-        if (!confirm(`🔔 ¿Notificar turnos a los ${negociosConTurnos.length} negocios que SÍ tienen reservas ${etiquetaDia}?\n\n(Se han descartado los que tienen la agenda vacía para ahorrar tiempo)`)) return;
+        if (!confirm(`¿Enviar sus citas de ${etiquetaDia} a los ${negociosConTurnos.length} salones que tienen alguna?\n\nLos que tienen la agenda vacía no reciben nada.`)) return;
 
         const btnNotificar = document.querySelector(selectorBoton);
         const textoOriginalBtn = btnNotificar ? btnNotificar.innerHTML : textoBotonFallback;
@@ -2737,7 +2760,7 @@ async function notificarTurnosPorFecha(diasAdelante = 1) {
 
             temasUsados.add(ntfyTopic);
 
-            const tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} turnos para ${etiquetaDia}`;
+            const tituloMensaje = `${neg.nombre}: ${turnosNegocio.length} citas para ${etiquetaDia}`;
             
             const porProfesional = {};
             const porServicio = {};
@@ -2749,7 +2772,7 @@ async function notificarTurnosPorFecha(diasAdelante = 1) {
                 porServicio[servicio] = (porServicio[servicio] || 0) + 1;
             });
 
-            let cuerpoMensaje = `🌟 *${neg.nombre}*\n📅 ${fechaLegible}\n📊 Total: ${turnosNegocio.length} turno${turnosNegocio.length !== 1 ? 's' : ''}\n━━━━━━━━━━━━━━━━━━━━━\n`;
+            let cuerpoMensaje = `🌟 *${neg.nombre}*\n📅 ${fechaLegible}\n📊 Total: ${turnosNegocio.length} cita${turnosNegocio.length !== 1 ? 's' : ''}\n━━━━━━━━━━━━━━━━━━━━━\n`;
             
             turnosNegocio.forEach((turno, index) => {
                 const hora = formatTo12Hour(turno.hora_inicio);
@@ -2879,14 +2902,43 @@ window.recargarSeccion = recargarSeccion;
 function avisoErrorCarga(clave) {
     if (!erroresCarga.has(clave)) return '';
     return `
-        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 flex flex-wrap items-center justify-between gap-2">
+        <div role="alert" class="mb-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 flex flex-wrap items-center justify-between gap-2">
             <span>No se pudo cargar <strong>${CARGAS_SECUNDARIAS[clave].nombre}</strong>.</span>
-            <button type="button" onclick="recargarSeccion('${clave}')" class="bg-white border border-red-300 hover:bg-red-100 text-red-800 px-3 py-2 rounded-lg font-semibold">Reintentar</button>
+            <button type="button" onclick="recargarSeccion('${clave}')" class="${BTN_SEC}">Reintentar</button>
         </div>`;
+}
+
+// ==================== ATAJOS ====================
+// "/" lleva al buscador. Esc cierra primero un menu abierto y, si no hay, el
+// modal de arriba. Tocar fuera de un menu, o elegir una opcion, lo cierra.
+function instalarAtajos() {
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            const menus = document.querySelectorAll('details[data-menu][open]');
+            if (menus.length) {
+                menus.forEach(menu => { menu.open = false; menu.querySelector('summary')?.focus(); });
+                return;
+            }
+            const modales = document.querySelectorAll('[data-modal]');
+            modales[modales.length - 1]?.remove();
+            return;
+        }
+        const escribiendo = e.target.closest?.('input, textarea, select, [contenteditable="true"]');
+        if (e.key === '/' && !escribiendo && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            document.getElementById('buscador')?.focus();
+        }
+    });
+    document.addEventListener('click', e => {
+        document.querySelectorAll('details[data-menu][open]').forEach(menu => {
+            if (!menu.contains(e.target) || e.target.closest('[role="menuitem"]')) menu.open = false;
+        });
+    });
 }
 
 // ==================== INICIALIZACIÓN ====================
 async function init() {
+    instalarAtajos();
     console.log('🚀 Inicializando panel Super Admin...');
     
     // Mostrar loading
@@ -2894,10 +2946,10 @@ async function init() {
     const listaNegocios = document.getElementById('lista-negocios');
     
     if (panelHeader) {
-        panelHeader.innerHTML = `<div class="text-center p-8"><div class="text-2xl">👑</div><p class="mt-2">Verificando acceso...</p></div>`;
+        panelHeader.innerHTML = `<p class="max-w-6xl mx-auto px-4 py-6 text-sm text-gray-600" role="status">Comprobando acceso…</p>`;
     }
     if (listaNegocios) {
-        listaNegocios.innerHTML = `<div class="text-center p-8">Cargando panel...</div>`;
+        listaNegocios.innerHTML = `<p class="max-w-6xl mx-auto px-4 text-sm text-gray-600" role="status">Cargando salones…</p>`;
     }
     
     // Verificar acceso
@@ -2910,11 +2962,11 @@ async function init() {
     if (negocios.length === 0) {
         if (panelHeader) {
             panelHeader.innerHTML = `
-                <div class="max-w-7xl mx-auto p-4">
-                    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg">
-                        <p class="font-bold">⚠️ No se encontraron negocios</p>
-                        <p>Verifica que la tabla 'vista_negocios_admin' exista en Supabase y contenga datos.</p>
-                        <button onclick="location.reload()" class="mt-2 bg-yellow-600 text-white px-3 py-1 rounded text-sm">Reintentar</button>
+                <div class="max-w-6xl mx-auto p-4">
+                    <div role="alert" class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                        <p class="font-semibold">No llegó ningún salón</p>
+                        <p class="text-sm mt-1">Comprueba que la vista vista_negocios_admin exista en Supabase y tenga datos.</p>
+                        <button type="button" onclick="location.reload()" class="${BTN_SEC} mt-3">Reintentar</button>
                     </div>
                 </div>
             `;
