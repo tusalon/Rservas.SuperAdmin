@@ -82,6 +82,9 @@ function commercialActionFor({ segment, paying, futureAppointments, operational,
     if (paying && (segment === 'En riesgo' || segment === 'Dormida')) {
         return { priority: 'P0', diagnosis: 'Cliente de pago en riesgo', action: 'Llamar y resolver antes de perder la suscripción' };
     }
+    if (paying && segment === 'Sin estrenar') {
+        return { priority: 'P0', diagnosis: 'Paga y aún no recibe reservas', action: 'Ayudar a conseguir la primera reserva' };
+    }
     if (paying) {
         return { priority: 'P3', diagnosis: 'Cliente de pago activo', action: 'Retención, testimonio y referidos' };
     }
@@ -230,18 +233,25 @@ async function cargarAuditoriaComercial(negocios = []) {
                 total: 0, lastCreatedAt: null, reservations30: 0, reservations90: 0,
                 lastPastAppointment: null, nextAppointment: null, futureAppointments: 0,
             };
-            let lastActivity = commercialLatest(meta.updated_at || null, component.latestCreatedAt);
-            lastActivity = commercialLatest(lastActivity, booking.lastCreatedAt);
+            // negocios.updated_at NO cuenta como actividad: cambia por cualquier
+            // retoque de la ficha (y por arreglos masivos), y hacia que 191
+            // salones sin una sola reserva salieran como "Activa sin
+            // suscripcion". La actividad real de un salon son sus reservas.
+            const lastActivity = commercialLatest(component.latestCreatedAt, booking.lastCreatedAt);
             const daysWithoutActivity = commercialDaysSince(lastActivity, now);
+            const daysWithoutBookings = commercialDaysSince(booking.lastCreatedAt, now);
             const configured = meta.configurado === true;
             const operational = configured && component.professionals > 0 && component.services > 0 && component.schedules > 0;
             const anySetup = configured || component.professionals > 0 || component.services > 0 || component.schedules > 0 || booking.total > 0;
             let segment;
             if (!operational) {
                 segment = anySetup ? 'Configuración incompleta' : 'Nunca activada';
-            } else if (booking.reservations30 > 0 || daysWithoutActivity <= 30) {
+            } else if (booking.total === 0) {
+                // Lista para reservar pero ninguna reserva todavia.
+                segment = 'Sin estrenar';
+            } else if (booking.reservations30 > 0 || daysWithoutBookings <= 30) {
                 segment = 'Activa';
-            } else if (daysWithoutActivity <= 90) {
+            } else if (daysWithoutBookings <= 90) {
                 segment = 'En riesgo';
             } else {
                 segment = 'Dormida';
@@ -296,6 +306,10 @@ async function cargarSeguimientoComercial() {
         });
         commercialState.persistence = 'supabase';
         commercialWriteLocal();
+        // Las marcas (marcado/oculto) solo pueden vivir en Supabase si ya se
+        // corrio sql-crecimiento-comercial.sql; si no, siguen en el navegador.
+        const { error: sinColumnas } = await window.supabase.from(COMMERCIAL_TABLE).select('marcado').limit(1);
+        commercialState.marcasEnSupabase = !sinColumnas;
     } catch (error) {
         commercialState.persistence = 'local';
         console.warn('Seguimiento comercial en respaldo local:', error?.message || error);
@@ -317,7 +331,80 @@ function obtenerSeguimientoComercial(negocioId) {
         objecion: '',
         resultado: 'sin_cambio',
         notas: '',
+        marcado: false,
+        oculto: false,
+        referido_por: '',
+        testimonio: false,
+        ultima_plantilla: '',
     };
+}
+
+// Columnas que anade sql-crecimiento-comercial.sql. Si aun no se corrio, la
+// base rechaza el guardado entero: se reintenta sin ellas para no perder el
+// resto del seguimiento (y lo nuevo queda en este dispositivo).
+const COMMERCIAL_CAMPOS_NUEVOS = ['marcado', 'oculto', 'referido_por', 'testimonio', 'ultima_plantilla'];
+
+async function commercialUpsert(payload) {
+    let { error } = await window.supabase.from(COMMERCIAL_TABLE).upsert(payload, { onConflict: 'negocio_id' });
+    if (error && /column|PGRST204/i.test(`${error.message} ${error.code}`)) {
+        const base = { ...payload };
+        COMMERCIAL_CAMPOS_NUEVOS.forEach(campo => delete base[campo]);
+        ({ error } = await window.supabase.from(COMMERCIAL_TABLE).upsert(base, { onConflict: 'negocio_id' }));
+    }
+    if (error) throw error;
+}
+
+// Cambia algunos campos del seguimiento de un salon sin abrir el modal
+// (marcar, ocultar, ultimo contacto). Guarda aqui y en Supabase.
+async function actualizarSeguimientoComercial(negocioId, cambios) {
+    const current = obtenerSeguimientoComercial(negocioId);
+    const payload = {
+        ...current,
+        ...cambios,
+        negocio_id: negocioId,
+        prioridad_manual: current.prioridad_manual || null,
+        ultimo_contacto: (cambios.ultimo_contacto ?? current.ultimo_contacto) || null,
+        proximo_seguimiento: current.proximo_seguimiento || null,
+        created_at: current.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    };
+    commercialState.trackingByBusiness[String(negocioId)] = payload;
+    commercialWriteLocal();
+    try {
+        await commercialUpsert(payload);
+        return true;
+    } catch (error) {
+        console.warn('Seguimiento guardado solo en este dispositivo:', error?.message || error);
+        return false;
+    }
+}
+
+// Cada mensaje que se envia desde el panel queda en contactos_comerciales, y
+// el seguimiento del salon pasa a "contactado" con la fecha de hoy. Antes solo
+// quedaba en el navegador de quien lo envio.
+async function registrarContactoComercial(negocioId, { canal = 'whatsapp', plantilla = '' } = {}) {
+    const hoy = new Date();
+    const fecha = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    const current = obtenerSeguimientoComercial(negocioId);
+    const cambios = { ultimo_contacto: fecha, ultima_plantilla: plantilla || current.ultima_plantilla || '' };
+    if (!current.estado || current.estado === 'sin_contactar') cambios.estado = 'contactado';
+    const [historial] = await Promise.allSettled([
+        window.supabase.from('contactos_comerciales').insert({ negocio_id: negocioId, canal, plantilla: plantilla || null }),
+        actualizarSeguimientoComercial(negocioId, cambios),
+    ]);
+    const error = historial.status === 'fulfilled' ? historial.value?.error : historial.reason;
+    if (error) console.warn('No se guardo el contacto en el historial (¿falta sql-crecimiento-comercial.sql?):', error?.message || error);
+}
+
+async function cargarHistorialContactos(negocioId) {
+    const { data, error } = await window.supabase
+        .from('contactos_comerciales')
+        .select('canal,plantilla,created_at')
+        .eq('negocio_id', negocioId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+    if (error) return null;
+    return data || [];
 }
 
 const COMMERCIAL_STATUS_LABELS = {
@@ -348,6 +435,7 @@ function commercialSegmentClasses(segment) {
     if (segment === 'En riesgo') return 'bg-amber-50 text-amber-900 ring-amber-200';
     if (segment === 'Dormida') return 'bg-red-50 text-red-800 ring-red-200';
     if (segment === 'Configuración incompleta') return 'bg-amber-50 text-amber-900 ring-amber-200';
+    if (segment === 'Sin estrenar') return 'bg-amber-50 text-amber-900 ring-amber-200';
     return 'bg-gray-100 text-gray-700 ring-gray-200';
 }
 
@@ -379,6 +467,8 @@ function renderEmbudoComercial() {
         quickActivation: count(item => item.diagnosis === 'Solo falta horario' || item.diagnosis === 'Solo falta servicio'),
         dormantHistory: count(item => item.segment === 'Dormida' && item.total > 0),
         paidThisCycle: count((item, tracking) => tracking.estado === 'pago_confirmado'),
+        unused: count(item => item.segment === 'Sin estrenar'),
+        referrals: count((item, tracking) => tracking.testimonio === true || Boolean(tracking.referido_por)),
     };
     const persistenceLabel = commercialState.persistence === 'supabase'
         ? 'El seguimiento se guarda en Supabase y se ve igual en todos tus dispositivos.'
@@ -395,7 +485,7 @@ function renderEmbudoComercial() {
     };
     return `
         <p class="py-2 text-sm text-gray-600">Toca un grupo para ver solo esos salones en la lista. No escribas a toda la base con el mismo mensaje. ${persistenceLabel}</p>
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 pb-2">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pb-2">
             ${card('retencion', metrics.retention, 'Retención', 'Pagan y están en riesgo')}
             ${card('cierre_ahora', metrics.closeNow, 'Cierre ahora', 'Usan la agenda y no pagan')}
             ${card('activos_sin_pago', metrics.activeUnpaid, 'Activos sin pago', 'Ya vieron el valor')}
@@ -403,6 +493,8 @@ function renderEmbudoComercial() {
             ${card('activacion_rapida', metrics.quickActivation, 'Activación rápida', 'Solo falta horario o servicio')}
             ${card('dormidos_historial', metrics.dormantHistory, 'Recuperación', 'Dormidos con historial')}
             ${card('pago_confirmado', metrics.paidThisCycle, 'Ventas marcadas', 'Pago confirmado en seguimiento')}
+            ${card('sin_estrenar', metrics.unused, 'Sin estrenar', 'Listas y sin ninguna reserva')}
+            ${card('referidos', metrics.referrals, 'Referidos y testimonios', 'Recomendaron o pueden contar su experiencia')}
         </div>`;
 }
 
@@ -419,6 +511,8 @@ function commercialMatchesFilter(business, filter = commercialState.filter) {
     if (filter === 'dormidos_historial') return item.segment === 'Dormida' && item.total > 0;
     if (filter === 'pago_confirmado') return tracking.estado === 'pago_confirmado';
     if (filter === 'p1_sin_contactar') return item.priority === 'P1' && tracking.estado === 'sin_contactar';
+    if (filter === 'sin_estrenar') return item.segment === 'Sin estrenar';
+    if (filter === 'referidos') return tracking.testimonio === true || Boolean(tracking.referido_por);
     return true;
 }
 
@@ -468,6 +562,10 @@ function renderFichaComercial(business) {
     const configuration = item.operational
         ? 'Lista para reservar'
         : `${item.professionalCount} prof. · ${item.serviceCount} servicios · ${item.scheduleCount} horarios`;
+    // Se le escribio porque bajo su actividad y ya volvio a su ritmo.
+    const recuperado = tracking.ultima_plantilla === 'bajo_actividad'
+        && typeof window.bajaActividad === 'function' && window.bajaActividad(business) === null
+        && Number(item.reservations30) > 0;
     const chipComercial = (texto, clases) => `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${clases}">${texto}</span>`;
     const nextFollowUp = tracking.proximo_seguimiento
         ? `<span class="font-medium text-purple-800">Próximo seguimiento: ${commercialFormatDate(tracking.proximo_seguimiento)}</span>`
@@ -491,6 +589,12 @@ function renderFichaComercial(business) {
             </dl>
             <p class="mt-2 text-sm text-gray-800"><span class="font-medium">Diagnóstico:</span> ${commercialEscape(item.diagnosis)} · <span class="font-medium">Qué hacer:</span> ${commercialEscape(item.action)}</p>
             <p class="mt-1 text-sm">${nextFollowUp}${tracking.responsable ? ` · Responsable: <span class="font-medium">${commercialEscape(tracking.responsable)}</span>` : ''}</p>
+            ${(tracking.referido_por || tracking.testimonio || recuperado) ? `
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                    ${recuperado ? chipComercial('Recuperado tras el aviso', 'bg-green-50 text-green-800 ring-green-200') : ''}
+                    ${tracking.testimonio ? chipComercial('Puede dar testimonio', 'bg-purple-50 text-purple-800 ring-purple-200') : ''}
+                    ${tracking.referido_por ? chipComercial(`Recomendada por ${commercialEscape(tracking.referido_por)}`, 'bg-gray-100 text-gray-800 ring-gray-200') : ''}
+                </div>` : ''}
         </div>`;
 }
 
@@ -544,6 +648,17 @@ function abrirSeguimientoComercial(negocioId) {
                     <label class="md:col-span-2 text-sm font-semibold text-gray-700">Notas
                         <textarea id="com-notas" rows="4" class="mt-1 w-full border rounded-lg p-2.5" placeholder="Acuerdos, necesidad detectada y siguiente paso concreto">${commercialEscape(tracking.notas || '')}</textarea>
                     </label>
+                    <label class="text-sm font-semibold text-gray-700">Recomendada por
+                        <input id="com-referido" value="${commercialEscape(tracking.referido_por || '')}" placeholder="Salón o persona que la trajo" class="mt-1 w-full border rounded-lg p-2.5">
+                    </label>
+                    <label class="flex items-center gap-2 self-end min-h-11 text-sm font-semibold text-gray-700">
+                        <input id="com-testimonio" type="checkbox" class="h-5 w-5" ${tracking.testimonio ? 'checked' : ''}>
+                        Puede dar un testimonio
+                    </label>
+                </div>
+                <div class="mt-5">
+                    <h4 class="text-sm font-semibold text-gray-900">Contactos</h4>
+                    <div id="com-historial" class="mt-1 text-sm text-gray-600">Cargando…</div>
                 </div>
                 <div class="mt-5 flex flex-col-reverse sm:flex-row justify-end gap-2">
                     <button type="button" onclick="cerrarSeguimientoComercial()" class="${COMMERCIAL_BTN_SEC}">Cancelar</button>
@@ -553,6 +668,21 @@ function abrirSeguimientoComercial(negocioId) {
         </div>`;
     document.body.appendChild(modal);
     window.prepararModal?.(modal, 'Seguimiento comercial');
+    cargarHistorialContactos(negocioId).then(contactos => {
+        const destino = document.getElementById('com-historial');
+        if (!destino) return;
+        if (contactos === null) {
+            destino.textContent = 'El historial aparece cuando se ejecute sql-crecimiento-comercial.sql.';
+        } else if (!contactos.length) {
+            destino.textContent = 'Todavía no se le escribió desde el panel.';
+        } else {
+            destino.innerHTML = `<ul class="divide-y divide-gray-200">${contactos.map(c => `
+                <li class="py-1.5 flex justify-between gap-3">
+                    <span class="text-gray-900">${commercialEscape(window.nombrePlantilla?.(c.plantilla) || c.plantilla || c.canal)}</span>
+                    <span class="tabular-nums">${commercialFormatDate(c.created_at, true)}</span>
+                </li>`).join('')}</ul>`;
+        }
+    });
 }
 
 function cerrarSeguimientoComercial() {
@@ -564,6 +694,7 @@ async function guardarSeguimientoComercial(negocioId) {
     if (button) { button.disabled = true; button.textContent = 'Guardando…'; }
     const current = obtenerSeguimientoComercial(negocioId);
     const payload = {
+        ...current,
         negocio_id: negocioId,
         estado: document.getElementById('com-estado')?.value || 'sin_contactar',
         prioridad_manual: document.getElementById('com-prioridad')?.value || null,
@@ -573,6 +704,8 @@ async function guardarSeguimientoComercial(negocioId) {
         objecion: document.getElementById('com-objecion')?.value.trim() || null,
         resultado: document.getElementById('com-resultado')?.value || 'sin_cambio',
         notas: document.getElementById('com-notas')?.value.trim() || null,
+        referido_por: document.getElementById('com-referido')?.value.trim() || null,
+        testimonio: document.getElementById('com-testimonio')?.checked === true,
         created_at: current.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
     };
@@ -580,8 +713,7 @@ async function guardarSeguimientoComercial(negocioId) {
     commercialWriteLocal();
     let remoteSaved = false;
     try {
-        const { error } = await window.supabase.from(COMMERCIAL_TABLE).upsert(payload, { onConflict: 'negocio_id' });
-        if (error) throw error;
+        await commercialUpsert(payload);
         commercialState.persistence = 'supabase';
         remoteSaved = true;
     } catch (error) {
@@ -591,7 +723,7 @@ async function guardarSeguimientoComercial(negocioId) {
     cerrarSeguimientoComercial();
     if (typeof renderHeader === 'function') renderHeader();
     if (typeof actualizarListaNegocios === 'function') actualizarListaNegocios();
-    alert(remoteSaved ? '✅ Seguimiento guardado en Supabase.' : '💾 Seguimiento guardado en este dispositivo. Ejecuta el SQL incluido para sincronizarlo en Supabase.');
+    if (!remoteSaved) alert('El seguimiento se guardó solo en este dispositivo. Ejecuta el SQL de seguimiento comercial para que se guarde en Supabase.');
 }
 
 window.cargarAuditoriaComercial = cargarAuditoriaComercial;
@@ -610,5 +742,8 @@ window.limpiarFiltroComercial = limpiarFiltroComercial;
 // nadie de fuera pueda escribir en el estado.
 window.hayFiltroComercialActivo = () => commercialState.filter !== 'todos';
 window.abrirSeguimientoComercial = abrirSeguimientoComercial;
+window.registrarContactoComercial = registrarContactoComercial;
+window.actualizarSeguimientoComercial = actualizarSeguimientoComercial;
+window.marcasEnSupabase = () => commercialState.persistence === 'supabase' && commercialState.marcasEnSupabase === true;
 window.cerrarSeguimientoComercial = cerrarSeguimientoComercial;
 window.guardarSeguimientoComercial = guardarSeguimientoComercial;

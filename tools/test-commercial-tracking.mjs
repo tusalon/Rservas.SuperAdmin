@@ -12,6 +12,9 @@ const businesses = [
     { id: 'quick-schedule', nombre: 'Solo horario', estado_suscripcion: 'trial' },
     { id: 'dormant-history', nombre: 'Dormido', estado_suscripcion: 'inactiva' },
     { id: 'never-started', nombre: 'Nunca activado', estado_suscripcion: 'trial' },
+    // Lista para reservar, sin ninguna reserva y con la ficha retocada ayer:
+    // antes salia "Activa sin suscripcion" por updated_at (los 191).
+    { id: 'fresh-edit', nombre: 'Retocada ayer', estado_suscripcion: 'trial' },
 ];
 
 const tables = {
@@ -21,10 +24,11 @@ const tables = {
         { id: 'quick-schedule', configurado: true, updated_at: isoDaysAgo(10), es_tienda_externa: false },
         { id: 'dormant-history', configurado: true, updated_at: isoDaysAgo(150), es_tienda_externa: false },
         { id: 'never-started', configurado: false, updated_at: null, es_tienda_externa: false },
+        { id: 'fresh-edit', configurado: true, updated_at: isoDaysAgo(1), es_tienda_externa: false },
     ],
-    profesionales: ['active-unpaid', 'paying-risk', 'quick-schedule', 'dormant-history'].map(negocio_id => ({ negocio_id, created_at: isoDaysAgo(200), activo: true })),
-    servicios: ['active-unpaid', 'paying-risk', 'quick-schedule', 'dormant-history'].map(negocio_id => ({ negocio_id, created_at: isoDaysAgo(200), activo: true })),
-    horarios_profesionales: ['active-unpaid', 'paying-risk', 'dormant-history'].map(negocio_id => ({ negocio_id, created_at: isoDaysAgo(200), dias: ['lunes'] })),
+    profesionales: ['active-unpaid', 'paying-risk', 'quick-schedule', 'dormant-history', 'fresh-edit'].map(negocio_id => ({ negocio_id, created_at: isoDaysAgo(200), activo: true })),
+    servicios: ['active-unpaid', 'paying-risk', 'quick-schedule', 'dormant-history', 'fresh-edit'].map(negocio_id => ({ negocio_id, created_at: isoDaysAgo(200), activo: true })),
+    horarios_profesionales: ['active-unpaid', 'paying-risk', 'dormant-history', 'fresh-edit'].map(negocio_id => ({ negocio_id, created_at: isoDaysAgo(200), dias: ['lunes'] })),
     reservas: [
         { negocio_id: 'active-unpaid', created_at: isoDaysAgo(2), fecha: dateDaysFromNow(2), estado: 'reservada' },
         { negocio_id: 'paying-risk', created_at: isoDaysAgo(45), fecha: dateDaysFromNow(-40), estado: 'completada' },
@@ -81,6 +85,8 @@ assert.equal(context.obtenerAuditoriaComercial('paying-risk').priority, 'P0');
 assert.equal(context.obtenerAuditoriaComercial('quick-schedule').diagnosis, 'Solo falta horario');
 assert.equal(context.obtenerAuditoriaComercial('dormant-history').segment, 'Dormida');
 assert.equal(context.obtenerAuditoriaComercial('never-started').segment, 'Nunca activada');
+assert.equal(context.obtenerAuditoriaComercial('fresh-edit').segment, 'Sin estrenar', 'retocar la ficha no es actividad');
+assert.equal(context.obtenerAuditoriaComercial('fresh-edit').priority, 'P2');
 
 context.filtrarComercial('cierre_ahora');
 assert.deepEqual(context.aplicarFiltroComercial(businesses).map(item => item.id), ['active-unpaid']);
@@ -104,6 +110,7 @@ const actividad = Object.fromEntries([
     fila('paying-risk', { updated_at: isoDaysAgo(45), reservas_total: 1, reservas_ultima_creada: isoDaysAgo(45), reservas_90: 1, ultima_cita: dateDaysFromNow(-40) }),
     fila('quick-schedule', { updated_at: isoDaysAgo(10), horarios: 0, horarios_ultima: null }),
     fila('dormant-history', { updated_at: isoDaysAgo(150), reservas_total: 1, reservas_ultima_creada: isoDaysAgo(150), ultima_cita: dateDaysFromNow(-145) }),
+    fila('fresh-edit', { updated_at: isoDaysAgo(1) }),
     fila('never-started', { configurado: false, updated_at: null, profesionales: 0, servicios: 0, horarios: 0, profesionales_ultima: null, servicios_ultima: null, horarios_ultima: null }),
 ].map(f => [f.negocio_id, f]));
 
@@ -119,4 +126,4 @@ await context.cargarAuditoriaComercial(businesses);
 const despues = foto();
 assert.equal(despues, antes, 'la RPC da la misma auditoria que las tablas');
 
-console.log('commercial-tracking: 12 assertions OK');
+console.log('commercial-tracking: 14 assertions OK');

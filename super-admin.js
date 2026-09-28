@@ -27,6 +27,8 @@ let negociosData = [];
 let negociosConServicios = new Set();
 let negociosConHorarios = new Set();
 let serviciosSinProfesionalPorNegocio = {};
+// Fila de admin_actividad_negocios por salon (vacio si la funcion no existe)
+let actividadPorNegocio = {};
 let ordenActual = "reservas"; // 'reservas', 'semana' o 'fecha'
 let reservasDiarias = null; // null = aun cargando: se muestra "—", no un 0 falso
 let datosActualizadosEn = null; // hora en que llegaron los datos, no la del pintado
@@ -244,6 +246,7 @@ async function cargarNegocios() {
         try {
             const actividad = await actividadPromise;
             if (actividad) {
+                actividadPorNegocio = actividad;
                 const filas = Object.values(actividad);
                 negociosConServicios = new Set(filas.filter(f => f.servicios > 0).map(f => f.negocio_id));
                 negociosConHorarios = new Set(filas.filter(f => f.horarios_con_dias > 0).map(f => f.negocio_id));
@@ -863,7 +866,7 @@ function abrirModalCambiarPassword(id, nombreNegocio) {
     modal.id = 'modal-cambiar-password';
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
     modal.innerHTML = `
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-3 mb-4">
                 <div>
                     <h3 class="text-lg font-bold text-gray-900">Cambiar contraseña</h3>
@@ -981,7 +984,7 @@ function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
     modal.id = 'modal-pagado-hasta';
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
     modal.innerHTML = `
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-3 mb-4">
                 <div>
                     <h3 class="text-lg font-bold text-gray-900">Pagado hasta</h3>
@@ -1117,7 +1120,6 @@ function crearMensajeEntregaCliente(negocio) {
     const urlPublica = obtenerUrlPublicaNegocio(negocio);
     const urlAdmin = obtenerUrlAdminNegocio(negocio);
     const usuario = obtenerPrimerCampo(negocio, ['usuario', 'admin_usuario', 'username', 'slug', 'slug_local']);
-    const password = obtenerPrimerCampo(negocio, ['password', 'contrasena', 'contraseña', 'admin_password', 'clave']);
     const fechaPago = obtenerPrimerCampo(negocio, ['proximo_pago', 'fecha_renovacion', 'pagado_hasta']);
 
     return [
@@ -1130,7 +1132,8 @@ function crearMensajeEntregaCliente(negocio) {
         urlAdmin || 'Panel pendiente de confirmar',
         '',
         `Usuario: ${usuario || 'pendiente de confirmar'}`,
-        `Contraseña: ${password || 'pendiente de confirmar'}`,
+        // La contrasena nunca va en este mensaje: se reenvia, se reenvia...
+        'La contraseña te la enviamos en un mensaje aparte.',
         '',
         'Puedes entrar al panel para revisar tus reservas, crear citas manuales, editar servicios, profesionales, horarios, colores y datos del negocio.',
         '',
@@ -1268,16 +1271,26 @@ async function notificarVencimiento(negocio) {
     }
 }
 
-async function notificarATodos(boton) {
-    // Solo salones en uso: antes entraban tambien suspendidos, archivados,
-    // bajas y tiendas RomaHub.
+// A quien va un aviso masivo. Nunca a suspendidos, archivados, bajas ni
+// tiendas RomaHub.
+const enUso = n => ['activa', 'trial'].includes(n.estado_suscripcion);
+const SEGMENTOS_AVISO = {
+    en_uso: ['los salones activos y en prueba', enUso],
+    activos: ['los salones que pagan', n => n.estado_suscripcion === 'activa'],
+    prueba: ['los salones en prueba', n => n.estado_suscripcion === 'trial'],
+    sin_configurar: ['los que no terminaron la configuración', n => enUso(n) && n.configurado !== true],
+    nuevos: ['los que entraron en los últimos 30 días', n => enUso(n) && Number(n.dias_activo) <= 30],
+};
+
+async function notificarATodos(boton, segmento = 'en_uso') {
+    const [nombreSegmento, perteneceAlSegmento] = SEGMENTOS_AVISO[segmento] || SEGMENTOS_AVISO.en_uso;
     const destinatarios = negociosData.filter(n =>
-        n.es_tienda_externa !== true
-        && n.archivado !== true
-        && ['activa', 'trial'].includes(n.estado_suscripcion)
-    );
+        n.es_tienda_externa !== true && n.archivado !== true && perteneceAlSegmento(n));
+    // El canal global lo comparten todos los salones sin canal propio: para un
+    // grupo concreto no se usa, o le llegaria tambien a los de fuera del grupo.
+    const temaDe = n => (n.ntfy_topic || (segmento === 'en_uso' ? NTFY_TOPIC_GLOBAL : '')).trim();
     const topicsUnicos = Array.from(new Map(
-        destinatarios.map(n => [(n.ntfy_topic || NTFY_TOPIC_GLOBAL).trim(), n])
+        destinatarios.map(n => [temaDe(n), n])
     ).entries()).filter(([tema]) => Boolean(tema));
 
     if (topicsUnicos.length === 0) {
@@ -1285,7 +1298,7 @@ async function notificarATodos(boton) {
         return;
     }
 
-    const mensaje = prompt(`📢 Notificar a ${destinatarios.length} salones activos o en prueba (${topicsUnicos.length} canales):\n\nEscribe el mensaje que recibirán todos:`, 'Comunicado importante de Rservas');
+    const mensaje = prompt(`Aviso para ${nombreSegmento}: ${destinatarios.length} salones (${topicsUnicos.length} canales).\n\nEscribe el mensaje que recibirán todos:`, 'Comunicado importante de Rservas');
     if (!mensaje) return;
 
     if (!confirm(`Enviar este mensaje a ${topicsUnicos.length} canales ntfy?\n\n${mensaje}`)) return;
@@ -1325,7 +1338,7 @@ async function exportarCSV() {
     // embudo). Antes no respetaba "archivados" ni "pendientes".
     const resultados = negociosFiltrados();
     
-    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Estado suscripción', 'Segmento', 'Prioridad', 'Diagnóstico', 'Acción recomendada', 'Estado comercial', 'Última actividad', 'Última cita', 'Próxima cita', 'Reservas históricas', 'Reservas Mes', 'Profesionales', 'Próximo Pago', 'Monto', 'Próximo seguimiento', 'Responsable', 'Objeción', 'Notas'];
+    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Estado suscripción', 'Segmento', 'Prioridad', 'Diagnóstico', 'Acción recomendada', 'Estado comercial', 'Última actividad', 'Última cita', 'Próxima cita', 'Reservas históricas', 'Reservas Mes', 'Profesionales', 'Próximo Pago', 'Monto', 'Próximo seguimiento', 'Responsable', 'Objeción', 'Notas', 'Usa Finanzas (cobros 30 días)', 'Recomendada por', 'Puede dar testimonio'];
     const rows = resultados.map(n => {
         const audit = window.obtenerAuditoriaComercial?.(n.id) || {};
         const tracking = window.obtenerSeguimientoComercial?.(n.id) || {};
@@ -1335,7 +1348,8 @@ async function exportarCSV() {
             tracking.estado || 'sin_contactar', audit.lastActivity || '', audit.lastPastAppointment || '', audit.nextAppointment || '',
             audit.total || 0, n.reservas_mes || 0, audit.professionalCount ?? n.profesionales_activas ?? 0,
             n.proximo_pago || '', n.monto_ultimo_pago || PRECIO_MENSUAL, tracking.proximo_seguimiento || '',
-            tracking.responsable || '', tracking.objecion || '', tracking.notas || ''
+            tracking.responsable || '', tracking.objecion || '', tracking.notas || '',
+            actividadPorNegocio[n.id]?.finanzas_cobros_30 ?? '', tracking.referido_por || '', tracking.testimonio ? 'Sí' : ''
         ];
     });
     
@@ -1524,16 +1538,160 @@ function recorte(texto, max) {
     return limpio.length > max ? `${limpio.slice(0, max - 1)}…` : limpio;
 }
 
-function enlaceWhatsApp(n, texto = 'WhatsApp') {
-    const tel = normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
-    return tel
-        ? `<a href="https://wa.me/${tel}?text=${encodeURIComponent(WHATSAPP_MENSAJE)}" target="_blank" rel="noopener" class="${BTN_SEC}">${texto}</a>`
-        : '';
+function enlaceWhatsApp(n, texto = 'WhatsApp', plantilla = '') {
+    if (!normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais)) return '';
+    return `<button type="button" onclick="abrirWhatsAppConPlantilla(${jsArg(n.id)}, ${jsArg(plantilla)})" class="${BTN_SEC}">${texto}</button>`;
 }
 
 function botonRegistrarPago(n, clases = BTN_PRI) {
     return `<button type="button" onclick="window.abrirModalPagadoHasta(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${jsArg(fechaPagoDe(n))})" class="${clases}">Registrar pago</button>`;
 }
+
+// ==================== ALERTA DE ACTIVIDAD ====================
+// Un salon "bajo" si esta semana saco menos de la mitad de citas que su media
+// de las 3 semanas anteriores. Con menos de 3 citas por semana de media no se
+// avisa: con tan poco volumen cualquier semana floja parece una caida.
+function bajaActividad(n) {
+    const fila = actividadPorNegocio[n?.id];
+    if (!fila || fila.reservas_creadas_7d == null) return null;
+    const media = Math.max(0, (fila.reservas_28 || 0) - fila.reservas_creadas_7d) / 3;
+    if (media < 3 || fila.reservas_creadas_7d >= media * 0.5) return null;
+    return { semana: fila.reservas_creadas_7d, media: Math.round(media) };
+}
+window.bajaActividad = bajaActividad;
+
+// ==================== PLANTILLAS DE WHATSAPP ====================
+// Un mensaje por situacion, en tuteo. Ninguna menciona el precio y ninguna
+// lleva contrasenas. Se pueden editar antes de enviar.
+function cuandoVencePago(n) {
+    const fecha = fechaPagoDe(n);
+    const dias = fecha && !esFechaHeredada(fecha) ? diasHastaPago(fecha) : null;
+    if (dias == null) return 'pronto';
+    if (dias < 0) return `el ${_fechaCorta(fecha)} (ya pasó)`;
+    if (dias === 0) return 'hoy';
+    if (dias === 1) return 'mañana';
+    return `el ${_fechaCorta(fecha)}`;
+}
+
+const PLANTILLAS = {
+    saludo: {
+        titulo: 'Saludo de soporte',
+        texto: n => `Hola, te escribimos desde el soporte de RservasRoma. ¿Cómo te va con la app de ${n.nombre || 'tu salón'}? ¿Hay algo en lo que te podamos ayudar?`,
+    },
+    configurar: {
+        titulo: 'Terminar la configuración',
+        texto: n => `Hola, te escribimos desde RservasRoma. A ${n.nombre || 'tu salón'} todavía le faltan servicios o profesionales, y sin eso tus clientas no pueden reservar. ¿Te acompañamos a dejarlo listo? Son unos 10 minutos.`,
+    },
+    sin_horarios: {
+        titulo: 'Faltan los horarios',
+        texto: n => `Hola, te escribimos desde RservasRoma. A ${n.nombre || 'tu salón'} solo le faltan los horarios de trabajo para que tus clientas puedan reservar solas. ¿Te acompañamos a ponerlos ahora? Son unos minutos.`,
+    },
+    servicio_sin_profesional: {
+        titulo: 'Servicios sin profesional',
+        texto: n => `Hola, te escribimos desde RservasRoma. En ${n.nombre || 'tu salón'} hay servicios que ninguna profesional tiene asignados: tus clientas los ven pero no pueden reservarlos. ¿Te ayudamos a asignarlos?`,
+    },
+    primera_reserva: {
+        titulo: 'Conseguir la primera reserva',
+        texto: n => {
+            const enlace = obtenerUrlPublicaNegocio(n);
+            return `Hola, te escribimos desde RservasRoma. ${n.nombre || 'Tu salón'} ya está listo para recibir reservas, pero todavía no llegó la primera.${enlace ? ` Este es tu enlace para compartirlo con tus clientas: ${enlace}` : ''} ¿Quieres que te preparemos un mensaje para enviárselo?`;
+        },
+    },
+    vence: {
+        titulo: 'Vence la suscripción',
+        texto: n => `Hola, te escribimos desde RservasRoma. Tu suscripción de ${n.nombre || 'tu salón'} vence ${cuandoVencePago(n)}. Cuando hagas el pago, avísanos por aquí y lo registramos enseguida para que no se te bloquee el panel.`,
+    },
+    bajo_actividad: {
+        titulo: 'Bajó su actividad',
+        texto: n => `Hola, te escribimos desde RservasRoma. Vimos que esta semana ${n.nombre || 'tu salón'} recibió menos reservas que de costumbre. ¿Todo bien con la app? Si algo no te funciona, lo revisamos contigo.`,
+    },
+    finanzas: {
+        titulo: 'Probar Roma Finanzas',
+        texto: () => 'Hola, te escribimos desde RservasRoma. ¿Ya probaste Roma Finanzas en tu panel? Te dice cuánto te deja cada servicio después de pagar los materiales. Si quieres, te enseñamos a usarla en 5 minutos.',
+    },
+    referido: {
+        titulo: 'Pedir un referido',
+        texto: n => `Hola, te escribimos desde RservasRoma. Nos alegra ver que ${n.nombre || 'tu salón'} va muy bien con las reservas. ¿Conoces a otra dueña de salón a la que le pueda servir la app? Si nos pasas su contacto, la ayudamos a empezar.`,
+    },
+};
+
+function nombrePlantilla(clave) {
+    return PLANTILLAS[clave]?.titulo || '';
+}
+window.nombrePlantilla = nombrePlantilla;
+
+// La plantilla que mejor encaja con lo que le pasa a este salon.
+function sugerirPlantilla(n) {
+    const fecha = fechaPagoDe(n);
+    const dias = fecha && !esFechaHeredada(fecha) ? diasHastaPago(fecha) : null;
+    if (dias != null && dias <= 3 && dias >= -7) return 'vence';
+    const problemas = diagnosticarNegocio(n);
+    if (problemas.length === 1 && problemas[0] === 'sin horarios') return 'sin_horarios';
+    if (problemas.length === 1 && problemas[0].includes('sin profesional') && /^\d/.test(problemas[0])) return 'servicio_sin_profesional';
+    if (problemas.length) return 'configurar';
+    const auditoria = window.obtenerAuditoriaComercial?.(n.id);
+    if (auditoria?.segment === 'Sin estrenar') return 'primera_reserva';
+    if (bajaActividad(n)) return 'bajo_actividad';
+    const fila = actividadPorNegocio[n.id];
+    if (n.estado_suscripcion === 'activa' && fila && 'finanzas_cobros_30' in fila && !fila.finanzas_cobros_30) return 'finanzas';
+    if (n.estado_suscripcion === 'activa' && auditoria?.segment === 'Activa') return 'referido';
+    return 'saludo';
+}
+
+function abrirWhatsAppConPlantilla(negocioId, clave) {
+    const n = negociosData.find(x => String(x.id) === String(negocioId));
+    if (!n) return;
+    const tel = normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
+    if (!tel) {
+        alert(`${n.nombre || 'Este salón'} no tiene teléfono registrado.`);
+        return;
+    }
+    const sugerida = sugerirPlantilla(n);
+    const elegida = PLANTILLAS[clave] ? clave : sugerida;
+
+    document.getElementById('modal-whatsapp')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'modal-whatsapp';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <div class="min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900">Escribir por WhatsApp</h3>
+                    <p class="text-sm text-gray-600 break-words">${escapeHtml(n.nombre || '')} · ${escapeHtml(n.telefono || '')}</p>
+                </div>
+                <button type="button" onclick="document.getElementById('modal-whatsapp')?.remove()" aria-label="Cerrar" class="-mr-2 -mt-1 inline-flex items-center justify-center w-11 h-11 md:w-9 md:h-9 rounded-md text-gray-600 hover:bg-gray-100 text-2xl leading-none">&times;</button>
+            </div>
+            <label for="wa-plantilla" class="block text-sm font-medium text-gray-800 mb-1">Mensaje</label>
+            <select id="wa-plantilla" class="w-full rounded-md border border-gray-300 bg-white px-3 min-h-11 text-base md:text-sm text-gray-900 focus:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-200">
+                ${Object.entries(PLANTILLAS).map(([k, pl]) => `<option value="${k}" ${k === elegida ? 'selected' : ''}>${pl.titulo}${k === sugerida ? ' (sugerido)' : ''}</option>`).join('')}
+            </select>
+            <label for="wa-texto" class="block text-sm font-medium text-gray-800 mt-3 mb-1">Texto (puedes cambiarlo)</label>
+            <textarea id="wa-texto" rows="6" class="w-full rounded-md border border-gray-300 px-3 py-2 text-base md:text-sm text-gray-900 focus:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-200">${escapeHtml(PLANTILLAS[elegida].texto(n))}</textarea>
+            <p class="mt-1 text-sm text-gray-600">Queda anotado en el historial de contactos del salón.</p>
+            <div class="flex gap-2 mt-4">
+                <button type="button" onclick="document.getElementById('modal-whatsapp')?.remove()" class="${BTN_SEC} flex-1">Cancelar</button>
+                <button type="button" id="wa-enviar" class="${BTN_PRI} flex-1">Abrir WhatsApp</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    prepararModal(modal, 'Escribir por WhatsApp');
+
+    const selector = document.getElementById('wa-plantilla');
+    const texto = document.getElementById('wa-texto');
+    selector.addEventListener('change', () => { texto.value = PLANTILLAS[selector.value].texto(n); });
+    document.getElementById('wa-enviar').addEventListener('click', () => {
+        // window.open primero, dentro del clic: si no, el navegador lo bloquea.
+        window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto.value)}`, '_blank', 'noopener');
+        const plantilla = selector.value;
+        modal.remove();
+        registrarUltimoContacto(n.id, 'soporte');
+        Promise.resolve(window.registrarContactoComercial?.(n.id, { canal: 'whatsapp', plantilla }))
+            .finally(() => repintarPanel());
+    });
+}
+window.abrirWhatsAppConPlantilla = abrirWhatsAppConPlantilla;
 
 // ==================== RENDERIZADO DEL HEADER ====================
 // ==================== COBROS DE LA SEMANA ====================
@@ -1816,7 +1974,7 @@ function mostrarAccesoRestablecido(nombre, acceso) {
     modal.id = 'modal-acceso-restablecido';
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
     modal.innerHTML = `
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-3 mb-1">
                 <h3 class="text-lg font-semibold text-gray-900">Acceso restablecido</h3>
                 <button type="button" onclick="document.getElementById('modal-acceso-restablecido')?.remove()" aria-label="Cerrar" class="-mr-2 -mt-1 inline-flex items-center justify-center w-11 h-11 md:w-9 md:h-9 rounded-md text-gray-600 hover:bg-gray-100 text-2xl leading-none">&times;</button>
@@ -1878,7 +2036,7 @@ function verArticuloPorAprobar(tipo, itemId) {
     modal.id = 'modal-articulo-tienda';
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
     modal.innerHTML = `
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div class="relative aspect-square bg-gray-100">
                 ${item.imagen_url ? `<img src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre || '')}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-sm text-gray-600">Sin foto</div>'}
                 <button type="button" onclick="document.getElementById('modal-articulo-tienda')?.remove()" aria-label="Cerrar" class="absolute top-2 right-2 w-11 h-11 rounded-full bg-white/90 text-gray-800 text-2xl leading-none">&times;</button>
@@ -2235,19 +2393,47 @@ function calcularBandejaHoy() {
         detalle: i.dias === 0
             ? 'Vence hoy: ya no puede entrar a su panel'
             : `Venció hace ${-i.dias} ${-i.dias === 1 ? 'día' : 'días'}: no puede entrar a su panel`,
-        acciones: [enlaceWhatsApp(i.n), botonRegistrarPago(i.n)],
+        acciones: [enlaceWhatsApp(i.n, 'WhatsApp', 'vence'), botonRegistrarPago(i.n)],
     }));
     porCobrar.filter(i => i.dias === 1).forEach(i => agregar({
         peso: 3, tipo: 'Cobro', tono: 'ambar', negocioId: i.n.id, titulo: i.n.nombre,
         detalle: 'Vence mañana',
-        acciones: [enlaceWhatsApp(i.n), botonRegistrarPago(i.n)],
+        acciones: [enlaceWhatsApp(i.n, 'WhatsApp', 'vence'), botonRegistrarPago(i.n)],
     }));
+
+    // Seguimientos que tocan hoy o se pasaron (la fecha la pones en el modal
+    // de seguimiento). Antes se guardaba y no la miraba nadie.
+    salones.forEach(n => {
+        const seguimiento = window.obtenerSeguimientoComercial?.(n.id);
+        if (!seguimiento?.proximo_seguimiento) return;
+        const dias = diasHastaPago(seguimiento.proximo_seguimiento);
+        if (dias == null || dias > 0) return;
+        agregar({
+            peso: 3.5, tipo: 'Seguimiento', tono: 'morado', negocioId: n.id, titulo: n.nombre,
+            detalle: `${dias === 0 ? 'Toca hoy' : `Tocaba hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`}${seguimiento.notas ? ` · ${recorte(seguimiento.notas, 90)}` : ''}`,
+            acciones: [
+                enlaceWhatsApp(n),
+                `<button type="button" onclick="abrirSeguimientoComercial(${jsArg(n.id)})" class="${BTN_PRI}">Seguimiento</button>`,
+            ],
+        });
+    });
 
     calcularSalud(salones).criticos.filter(c => c.n.estado_suscripcion === 'activa').forEach(c => agregar({
         peso: 4, tipo: 'No recibe citas', tono: 'rojo', negocioId: c.n.id, titulo: c.n.nombre,
         detalle: `Paga y no puede recibir reservas: ${c.problemas.join(', ')}`,
         acciones: [enlaceWhatsApp(c.n)],
     }));
+
+    // Salones que pagan y esta semana sacaron menos de la mitad de lo normal.
+    salones.filter(n => n.estado_suscripcion === 'activa').forEach(n => {
+        const baja = bajaActividad(n);
+        if (!baja) return;
+        agregar({
+            peso: 4.5, tipo: 'Bajó su actividad', tono: 'ambar', negocioId: n.id, titulo: n.nombre,
+            detalle: `Esta semana sacó ${baja.semana} ${baja.semana === 1 ? 'cita' : 'citas'}; lo normal son unas ${baja.media}.`,
+            acciones: [enlaceWhatsApp(n, 'WhatsApp', 'bajo_actividad')],
+        });
+    });
 
     salones.forEach(n => {
         const auditoria = window.obtenerAuditoriaComercial?.(n.id);
@@ -2263,6 +2449,27 @@ function calcularBandejaHoy() {
             ],
         });
     });
+
+    // A quien escribir hoy: los que estan a punto de pagar (P1) y no tienen
+    // contacto en 14 dias. Cinco al dia, primero los que tienen mas citas
+    // futuras: es una cola, no una lista para escribirle a todos a la vez.
+    const hace14 = Date.now() - 14 * 86400000;
+    salones
+        .map(n => ({ n, auditoria: window.obtenerAuditoriaComercial?.(n.id), seguimiento: window.obtenerSeguimientoComercial?.(n.id) || {} }))
+        .filter(({ auditoria, seguimiento }) => auditoria && !auditoria.isExternalStore
+            && (seguimiento.prioridad_manual || auditoria.priority) === 'P1'
+            && !['pago_confirmado', 'no_interesado'].includes(seguimiento.estado)
+            && (!seguimiento.ultimo_contacto || fechaLocal(seguimiento.ultimo_contacto).getTime() < hace14))
+        .sort((a, b) => (b.auditoria.futureAppointments || 0) - (a.auditoria.futureAppointments || 0))
+        .slice(0, 5)
+        .forEach(({ n, auditoria }) => agregar({
+            peso: 5.5, tipo: 'Escribir hoy', tono: 'morado', negocioId: n.id, titulo: n.nombre,
+            detalle: `${auditoria.diagnosis}. ${auditoria.action}.`,
+            acciones: [
+                enlaceWhatsApp(n),
+                `<button type="button" onclick="abrirSeguimientoComercial(${jsArg(n.id)})" class="${BTN_PRI}">Seguimiento</button>`,
+            ],
+        }));
 
     tiendasPorAprobarData.forEach(t => agregar({
         peso: 6, tipo: 'RomaHub', tono: 'ambar', titulo: t.nombre,
@@ -2363,7 +2570,11 @@ function renderHeader() {
                     <button type="button" onclick="location.reload()" class="${BTN_SEC}">Recargar</button>
                     ${menuDesplegable('Más', `
                         <p class="px-3 pt-1 text-xs font-semibold text-gray-600">Avisos a las apps</p>
-                        ${itemMenu('Notificar a todos los salones', 'notificarATodos(this)')}
+                        ${itemMenu('Aviso a activos y en prueba', "notificarATodos(this, 'en_uso')")}
+                        ${itemMenu('Aviso solo a los que pagan', "notificarATodos(this, 'activos')")}
+                        ${itemMenu('Aviso solo a los que están en prueba', "notificarATodos(this, 'prueba')")}
+                        ${itemMenu('Aviso a los que no terminaron la configuración', "notificarATodos(this, 'sin_configurar')")}
+                        ${itemMenu('Aviso a los nuevos (30 días)', "notificarATodos(this, 'nuevos')")}
                         <button type="button" role="menuitem" onclick="notificarTurnosHoy()" class="${ITEM_MENU}">Enviar a cada salón sus citas de hoy</button>
                         <button type="button" role="menuitem" onclick="notificarTurnosManana()" class="${ITEM_MENU}">Enviar a cada salón sus citas de mañana</button>
                         <div role="separator" class="my-1 border-t border-gray-200"></div>
@@ -2476,7 +2687,15 @@ function tarjetaNegocio(n, posicion) {
     const reservasSemana = getReservasSemanaPorNegocio(n.id);
     const esPendiente = pendientesLocal.includes(n.id);
     const esEliminado = eliminadosLocal.includes(n.id);
-    const ultimoContacto = getUltimaVezTexto(n.id, 'ultima');
+    const seguimiento = window.obtenerSeguimientoComercial?.(n.id);
+    const ultimoContacto = seguimiento?.ultimo_contacto
+        ? `Último contacto: ${_fechaCorta(seguimiento.ultimo_contacto)}`
+        : getUltimaVezTexto(n.id, 'ultima');
+    const fila = actividadPorNegocio[n.id];
+    const finanzasTexto = !fila || !('finanzas_cobros_30' in fila) ? '—'
+        : fila.finanzas_cobros_30 > 0 ? `Sí · ${_fechaCorta(fila.finanzas_ultimo_cobro)}`
+        : fila.finanzas_ultimo_cobro ? `Dejó el ${_fechaCorta(fila.finanzas_ultimo_cobro)}`
+        : 'No';
     const urlNegocio = normalizarUrlNegocio(n);
 
     // Se escapa ANTES de resaltar: nombre y telefono los escribe la duena,
@@ -2514,7 +2733,6 @@ function tarjetaNegocio(n, posicion) {
 
     const mas = menuDesplegable('Más', `
         ${itemMenu('Mensaje de bienvenida', `window.generarMensajeCliente(${jsArg(n)})`)}
-        ${itemMenu('Saludo por WhatsApp', `window.enviarWhatsAppSimple(${jsArg(n.telefono)}, ${jsArg(n.nombre)}, ${jsArg(n.id)})`)}
         ${itemMenu('Enviar notificación a la app', `window.notificarNegocio(${jsArg(n)})`)}
         ${itemMenu('Aviso de vencimiento', `window.notificarVencimiento(${jsArg(n)})`)}
         ${itemMenu(esPendiente ? 'Quitar marca' : 'Marcar para revisar', `window.togglePendiente(${jsArg(n.id)})`)}
@@ -2546,7 +2764,7 @@ function tarjetaNegocio(n, posicion) {
             <dl class="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-x-4 gap-y-2">
                 ${dato('Citas este mes', `${n.reservas_mes || 0}${ordenActual === 'reservas' && Number(n.reservas_mes) > 0 ? ` <span class="font-normal text-gray-600">#${posicion}</span>` : ''}`)}
                 ${dato('Últimos 7 días', cargando ? '—' : reservasSemana)}
-                ${dato('Sacadas hoy', cargando ? '—' : reservasHoy)}
+                ${dato('Usa Finanzas', finanzasTexto)}
                 ${dato('Profesionales', n.profesionales_activas || 0)}
                 ${dato('Antigüedad', `${n.dias_activo || 0} d`)}
                 ${dato('Próximo pago', pagoTexto, dias != null && dias <= 3 ? 'text-red-700' : 'text-gray-900')}
@@ -2557,7 +2775,7 @@ function tarjetaNegocio(n, posicion) {
             <div class="mt-3 flex flex-wrap items-center gap-2">
                 ${principal}
                 ${pagadoHasta}
-                <button type="button" onclick="window.enviarWhatsApp(${jsArg(n.telefono)}, ${jsArg(n.nombre)}, ${jsArg(n.id)})" class="${BTN_SEC}">WhatsApp</button>
+                <button type="button" onclick="abrirWhatsAppConPlantilla(${jsArg(n.id)})" class="${BTN_SEC}">WhatsApp</button>
                 ${mas}
                 ${ultimoContacto ? `<span class="text-xs text-gray-600">${escapeHtml(ultimoContacto)}</span>` : ''}
             </div>
@@ -2612,36 +2830,45 @@ async function logout() {
 // ==================== FUNCIONES NUEVAS ====================
 function togglePendiente(id) {
     const index = pendientesLocal.indexOf(id);
-    
-    if (index > -1) {
-        pendientesLocal.splice(index, 1);
-    } else {
-        pendientesLocal.push(id);
-    }
-    
+    if (index > -1) pendientesLocal.splice(index, 1);
+    else pendientesLocal.push(id);
     localStorage.setItem('pendientes_admin', JSON.stringify(pendientesLocal));
+    if (window.marcasEnSupabase?.()) window.actualizarSeguimientoComercial(id, { marcado: pendientesLocal.includes(id) });
     actualizarListaNegocios();
     renderHeader();
 }
 
 function toggleEliminado(id) {
     const index = eliminadosLocal.indexOf(id);
-    
-    if (index > -1) {
-        eliminadosLocal.splice(index, 1);
-    } else {
-        eliminadosLocal.push(id);
-    }
-    
+    if (index > -1) eliminadosLocal.splice(index, 1);
+    else eliminadosLocal.push(id);
     localStorage.setItem('eliminados_admin', JSON.stringify(eliminadosLocal));
-    
-    // Si estamos en la vista de eliminados y quitamos el último, volver a todos
+    if (window.marcasEnSupabase?.()) window.actualizarSeguimientoComercial(id, { oculto: eliminadosLocal.includes(id) });
+
+    // Si estamos en la vista de ocultos y quitamos el ultimo, volver a todos
     if (filtroActual === 'eliminados' && eliminadosLocal.length === 0) {
         filtroActual = 'todos';
     }
-    
+
     actualizarListaNegocios();
     renderHeader();
+}
+
+// "Marcados" y "Ocultos" se guardan en el seguimiento de cada salon, en
+// Supabase: antes vivian solo en este navegador y en el movil no se veian.
+// Lo que ya estaba marcado aqui se sube una vez; despues manda Supabase.
+async function sincronizarMarcas() {
+    if (!window.marcasEnSupabase?.()) return;
+    const seguimiento = id => window.obtenerSeguimientoComercial(id);
+    const subir = [
+        ...pendientesLocal.filter(id => !seguimiento(id).marcado).map(id => [id, { marcado: true }]),
+        ...eliminadosLocal.filter(id => !seguimiento(id).oculto).map(id => [id, { oculto: true }]),
+    ];
+    for (const [id, cambios] of subir) await window.actualizarSeguimientoComercial(id, cambios);
+    pendientesLocal = negociosData.filter(n => seguimiento(n.id).marcado === true).map(n => n.id);
+    eliminadosLocal = negociosData.filter(n => seguimiento(n.id).oculto === true).map(n => n.id);
+    localStorage.setItem('pendientes_admin', JSON.stringify(pendientesLocal));
+    localStorage.setItem('eliminados_admin', JSON.stringify(eliminadosLocal));
 }
 
 // Helper copiado de Node.js para formatear la hora a 12h
@@ -2992,6 +3219,8 @@ async function init() {
     ]).then(([totalDiarias]) => {
         reservasDiarias = totalDiarias || 0;
         datosActualizadosEn = new Date();
+        return sincronizarMarcas().catch(error => console.warn('No se pudieron sincronizar las marcas:', error));
+    }).then(() => {
         renderHeader();
         actualizarListaNegocios();
         actualizarBotonesFiltro();
