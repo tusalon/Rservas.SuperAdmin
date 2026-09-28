@@ -1555,7 +1555,7 @@ function menuDesplegable(etiqueta, items, { alinear = 'right', ancho = 'w-64', b
     return `
         <details class="relative" data-menu>
             <summary class="${boton} cursor-pointer list-none [&::-webkit-details-marker]:hidden">${etiqueta}${ICONO_FLECHA}</summary>
-            <div role="menu" class="absolute ${alinear === 'left' ? 'left-0' : 'right-0'} z-30 mt-1 ${ancho} ${UI.panel} shadow-lg py-1">${items}</div>
+            <div role="menu" class="absolute ${alinear === 'left' ? 'left-0' : 'right-0'} z-30 mt-1 ${ancho} max-w-[calc(100vw-1rem)] ${UI.panel} shadow-lg py-1">${items}</div>
         </details>`;
 }
 
@@ -3223,6 +3223,27 @@ function avisoErrorCarga(clave) {
         </div>`;
 }
 
+// ==================== MENUS DENTRO DE LA PANTALLA ====================
+// El menu se abre hacia donde quepa. En el movil el boton "Mas" de la
+// cabecera queda a la izquierda y el menu, alineado a su derecha, se salia
+// por el borde izquierdo de la pantalla.
+function colocarMenu(menu) {
+    const panel = menu.querySelector('[role="menu"]');
+    if (!panel) return;
+    panel.style.left = '';
+    panel.style.right = '';
+    const margen = 8;
+    const caja = panel.getBoundingClientRect();
+    const boton = menu.getBoundingClientRect();
+    if (caja.left < margen) {
+        panel.style.right = 'auto';
+        panel.style.left = `${margen - boton.left}px`;
+    } else if (caja.right > window.innerWidth - margen) {
+        panel.style.left = 'auto';
+        panel.style.right = `${boton.right - (window.innerWidth - margen)}px`;
+    }
+}
+
 // ==================== ATAJOS ====================
 // "/" lleva al buscador. Esc cierra primero un menu abierto y, si no hay, el
 // modal de arriba. Tocar fuera de un menu, o elegir una opcion, lo cierra.
@@ -3244,6 +3265,10 @@ function instalarAtajos() {
             document.getElementById('buscador')?.focus();
         }
     });
+    // "toggle" no burbujea: se escucha en captura.
+    document.addEventListener('toggle', e => {
+        if (e.target.matches?.('details[data-menu]') && e.target.open) colocarMenu(e.target);
+    }, true);
     document.addEventListener('click', e => {
         document.querySelectorAll('details[data-menu][open]').forEach(menu => {
             if (!menu.contains(e.target) || e.target.closest('[role="menuitem"]')) menu.open = false;
