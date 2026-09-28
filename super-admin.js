@@ -30,11 +30,11 @@ let serviciosSinProfesionalPorNegocio = {};
 let ordenActual = "reservas"; // 'reservas', 'semana' o 'fecha'
 let reservasDiarias = null; // null = aun cargando: se muestra "—", no un 0 falso
 let datosActualizadosEn = null; // hora en que llegaron los datos, no la del pintado
-let reservasDiariasData = [];
+let reservasHoyPorNegocio = {}; // citas sacadas hoy, por negocio
 let reportesTiendaData = [];
 let tiendasPorAprobarData = [];
 let ticketsSoporteData = [];
-let reservasSemanaData = [];
+let reservasSemanaPorNegocio = {}; // citas con fecha en los ultimos 7 dias, por negocio
 let actividadReservasCargada = false;
 let pendientesLocal = JSON.parse(localStorage.getItem('pendientes_admin')) || [];
 let eliminadosLocal = JSON.parse(localStorage.getItem('eliminados_admin')) || [];
@@ -61,7 +61,19 @@ async function verificarAcceso() {
 }
 
 // ==================== OBTENER RESERVAS DIARIAS ====================
+// Cuenta por negocio a partir de filas sueltas (carga de antes).
+function contarPorNegocio(filas) {
+    const cuenta = {};
+    (filas || []).forEach(f => { cuenta[f.negocio_id] = (cuenta[f.negocio_id] || 0) + 1; });
+    return cuenta;
+}
+
 async function obtenerReservasDiarias() {
+    const actividad = await cargarActividadAdmin();
+    if (actividad) {
+        reservasHoyPorNegocio = Object.fromEntries(Object.values(actividad).map(f => [f.negocio_id, f.reservas_hoy]));
+        return Object.values(reservasHoyPorNegocio).reduce((suma, n) => suma + n, 0);
+    }
     try {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
@@ -78,8 +90,8 @@ async function obtenerReservasDiarias() {
             return 0;
         }
 
-        reservasDiariasData = data || [];
-        return reservasDiariasData.length;
+        reservasHoyPorNegocio = contarPorNegocio(data);
+        return (data || []).length;
     } catch (error) {
         console.error('Error obteniendo reservas diarias:', error);
         return 0;
@@ -104,6 +116,29 @@ async function traerTodo(tabla, columnas, aplicarFiltros) {
     }
     return { data: todo };
 }
+
+// Una fila por negocio con toda su actividad, calculada en la base
+// (sql-admin-actividad-negocios.sql): sustituye a bajar reservas, servicios,
+// horarios y profesionales enteros. Se pide una sola vez y la comparten el
+// panel y el embudo comercial. Si la funcion aun no existe, da null y cada
+// parte usa su carga de antes.
+// ponytail: PostgREST devuelve como maximo 1000 filas; hoy hay ~400 negocios.
+let actividadAdminPromesa = null;
+function cargarActividadAdmin() {
+    if (!actividadAdminPromesa) {
+        actividadAdminPromesa = window.supabase.rpc('admin_actividad_negocios')
+            .then(({ data, error }) => {
+                if (error || !Array.isArray(data) || data.length === 0) {
+                    if (error) console.warn('admin_actividad_negocios no disponible, se usa la carga de antes:', error.message);
+                    return null;
+                }
+                return Object.fromEntries(data.map(fila => [String(fila.negocio_id), fila]));
+            })
+            .catch(() => null);
+    }
+    return actividadAdminPromesa;
+}
+window.cargarActividadAdmin = cargarActividadAdmin;
 
 // Pide columnas sueltas de negocios y, si alguna no existe todavia en esta
 // base, la deja fuera y vuelve a intentar.
@@ -155,11 +190,13 @@ async function cargarNegocios() {
         // OJO: Supabase devuelve como maximo 1000 filas por consulta. Hay 2150
         // servicios y 1290 asignaciones, asi que sin paginar faltaban datos y
         // salones bien configurados aparecian como rotos. Se pagina siempre.
-        const saludPromise = Promise.all([
+        // Con admin_actividad_negocios no hace falta bajar nada de esto.
+        const actividadPromise = cargarActividadAdmin();
+        const saludPromise = actividadPromise.then(actividad => actividad ? null : Promise.all([
             traerTodo('servicios', 'negocio_id,id', q => q.eq('activo', true)),
             traerTodo('horarios_profesionales', 'negocio_id,dias'),
             traerTodo('servicios_profesionales', 'negocio_id,servicio_id')
-        ]);
+        ]));
 
         const { data, error } = await window.supabase
             .from('vista_negocios_admin')
@@ -205,27 +242,38 @@ async function cargarNegocios() {
         }
 
         try {
-            const [rServicios, rHorarios, rAsignaciones] = await saludPromise;
-            const servicios = rServicios.data || [];
-            const horarios = rHorarios.data || [];
-            const asignaciones = rAsignaciones.data || [];
+            const actividad = await actividadPromise;
+            if (actividad) {
+                const filas = Object.values(actividad);
+                negociosConServicios = new Set(filas.filter(f => f.servicios > 0).map(f => f.negocio_id));
+                negociosConHorarios = new Set(filas.filter(f => f.horarios_con_dias > 0).map(f => f.negocio_id));
+                serviciosSinProfesionalPorNegocio = Object.fromEntries(
+                    filas.filter(f => f.servicios_sin_profesional > 0).map(f => [f.negocio_id, f.servicios_sin_profesional])
+                );
+            } else {
+                // Carga de antes, si aun no se corrio sql-admin-actividad-negocios.sql.
+                const [rServicios, rHorarios, rAsignaciones] = await saludPromise;
+                const servicios = rServicios.data || [];
+                const horarios = rHorarios.data || [];
+                const asignaciones = rAsignaciones.data || [];
 
-            negociosConServicios = new Set(servicios.map(s => s.negocio_id));
-            negociosConHorarios = new Set(horarios.filter(h => (h.dias || []).length > 0).map(h => h.negocio_id));
+                negociosConServicios = new Set(servicios.map(s => s.negocio_id));
+                negociosConHorarios = new Set(horarios.filter(h => (h.dias || []).length > 0).map(h => h.negocio_id));
 
-            // Servicios que ningun profesional puede dar: la clienta los ve pero
-            // no puede reservarlos (le paso a HeyStudio con 6 de 7).
-            const asignadosPorNegocio = {};
-            asignaciones.forEach(a => {
-                (asignadosPorNegocio[a.negocio_id] = asignadosPorNegocio[a.negocio_id] || new Set()).add(a.servicio_id);
-            });
-            serviciosSinProfesionalPorNegocio = {};
-            servicios.forEach(s => {
-                const asignados = asignadosPorNegocio[s.negocio_id];
-                if (!asignados || !asignados.has(s.id)) {
-                    serviciosSinProfesionalPorNegocio[s.negocio_id] = (serviciosSinProfesionalPorNegocio[s.negocio_id] || 0) + 1;
-                }
-            });
+                // Servicios que ningun profesional puede dar: la clienta los ve pero
+                // no puede reservarlos (le paso a HeyStudio con 6 de 7).
+                const asignadosPorNegocio = {};
+                asignaciones.forEach(a => {
+                    (asignadosPorNegocio[a.negocio_id] = asignadosPorNegocio[a.negocio_id] || new Set()).add(a.servicio_id);
+                });
+                serviciosSinProfesionalPorNegocio = {};
+                servicios.forEach(s => {
+                    const asignados = asignadosPorNegocio[s.negocio_id];
+                    if (!asignados || !asignados.has(s.id)) {
+                        serviciosSinProfesionalPorNegocio[s.negocio_id] = (serviciosSinProfesionalPorNegocio[s.negocio_id] || 0) + 1;
+                    }
+                });
+            }
         } catch (e) {
             console.warn('No se pudo calcular el estado de configuracion de los salones:', e);
         }
@@ -245,10 +293,16 @@ async function cargarNegocios() {
 // ==================== OBTENER RESERVAS DIARIAS POR NEGOCIO ====================
 function getReservasDiariasPorNegocio(negocioId) {
     if (!negocioId) return 0;
-    return reservasDiariasData.filter(r => r.negocio_id === negocioId).length;
+    return reservasHoyPorNegocio[negocioId] || 0;
 }
 
 async function obtenerActividadReservas() {
+    const actividad = await cargarActividadAdmin();
+    if (actividad) {
+        reservasSemanaPorNegocio = Object.fromEntries(Object.values(actividad).map(f => [f.negocio_id, f.reservas_7d]));
+        actividadReservasCargada = true;
+        return;
+    }
     try {
         actividadReservasCargada = false;
         const hoy = new Date();
@@ -269,18 +323,18 @@ async function obtenerActividadReservas() {
             'id, negocio_id, fecha',
             q => q.gte('fecha', fechaInicioSemana).lte('fecha', fechaHoy).order('id')
         );
-        reservasSemanaData = semana || [];
+        reservasSemanaPorNegocio = contarPorNegocio(semana);
         actividadReservasCargada = true;
     } catch (error) {
         console.error('Error obteniendo actividad de reservas:', error);
-        reservasSemanaData = [];
+        reservasSemanaPorNegocio = {};
         actividadReservasCargada = true;
     }
 }
 
 function getReservasSemanaPorNegocio(negocioId) {
     if (!negocioId) return 0;
-    return reservasSemanaData.filter(r => r.negocio_id === negocioId).length;
+    return reservasSemanaPorNegocio[negocioId] || 0;
 }
 
 function escapeHtml(value) {
@@ -465,6 +519,37 @@ function actualizarBotonOrden() {
 }
 
 // ==================== ACCIONES ====================
+// Despues de una accion se vuelve a leer SOLO ese negocio y se repinta. Antes
+// era location.reload(): con internet de Cuba bajaba todo el panel otra vez y
+// se perdian el scroll, el filtro y la busqueda.
+const CAMPOS_EXTRA_NEGOCIO = ['sitio_web', 'ntfy_topic', 'es_tienda_externa', 'archivado', 'romahub_estado', 'romahub_nota_rechazo', 'configurado'];
+
+function repintarPanel() {
+    renderHeader();
+    actualizarListaNegocios();
+    actualizarBotonesFiltro();
+    actualizarBotonOrden();
+}
+
+async function refrescarNegocio(id, cambiosLocales = {}) {
+    const i = negociosData.findIndex(n => String(n.id) === String(id));
+    try {
+        const { data } = await window.supabase.from('vista_negocios_admin').select('*').eq('id', id).limit(1);
+        const fila = data?.[0];
+        if (fila && i !== -1) {
+            // Los extras no vienen en la vista (ver cargarNegocios): se conservan.
+            const extras = Object.fromEntries(CAMPOS_EXTRA_NEGOCIO.map(c => [c, negociosData[i][c]]));
+            negociosData[i] = aplicarRectificacionNegocio({ ...negociosData[i], ...fila, ...extras, ...cambiosLocales });
+        } else if (i !== -1) {
+            negociosData[i] = { ...negociosData[i], ...cambiosLocales };
+        }
+    } catch (error) {
+        console.warn('No se pudo releer el negocio; pulsa Recargar para ver el cambio:', error);
+        if (i !== -1) negociosData[i] = { ...negociosData[i], ...cambiosLocales };
+    }
+    repintarPanel();
+}
+
 async function activarDesdeTrial(id, nombreNegocio) {
     if (!confirm(`✅ ¿Activar negocio?\n\nNegocio: ${nombreNegocio}\n\nPasará de "Prueba" a "ACTIVO".\n\nPróximo pago en ${DIAS_POR_DEFECTO} días.`)) return;
     
@@ -483,7 +568,7 @@ async function activarDesdeTrial(id, nombreNegocio) {
         
         if (error) throw error;
         alert(`✅ Negocio activado. Próximo pago: ${nuevaFecha}`);
-        location.reload();
+        await refrescarNegocio(id);
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
@@ -500,7 +585,7 @@ async function suspenderNegocio(id, nombreNegocio) {
         
         if (error) throw error;
         alert('✅ Negocio suspendido correctamente');
-        location.reload();
+        await refrescarNegocio(id);
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
@@ -524,7 +609,7 @@ async function reactivarNegocio(id, nombreNegocio) {
         
         if (error) throw error;
         alert(`✅ Negocio reactivado. Próximo pago: ${nuevaFecha}`);
-        location.reload();
+        await refrescarNegocio(id);
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
@@ -542,7 +627,7 @@ async function inactivarNegocio(id, nombreNegocio) {
         
         if (error) throw error;
         alert('✅ Negocio dado de baja permanentemente');
-        location.reload();
+        await refrescarNegocio(id);
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
@@ -735,7 +820,8 @@ async function borrarNegocioCompleto(id, nombreNegocio) {
             .join('\n') || 'No habia registros relacionados.';
 
         alert(`Negocio borrado de Supabase.\n\n${resumen}`);
-        location.reload();
+        negociosData = negociosData.filter(n => String(n.id) !== String(id));
+        repintarPanel();
     } catch (error) {
         alert('Error: ' + error.message);
     }
@@ -788,7 +874,7 @@ async function reiniciarNegocioCompleto(id, nombreNegocio) {
             .join('\n') || 'No habia registros relacionados.';
 
         alert(`Negocio reiniciado.\n\nAl volver a entrar vera el asistente de configuracion inicial.\n\n${resumen}`);
-        location.reload();
+        await refrescarNegocio(id, { configurado: false });
     } catch (error) {
         alert('Error: ' + error.message);
     }
@@ -970,7 +1056,7 @@ async function guardarPagadoHasta(id) {
         if (error) throw error;
         document.getElementById('modal-pagado-hasta')?.remove();
         alert(`Pago actualizado. Pagado hasta: ${fecha}`);
-        location.reload();
+        await refrescarNegocio(id);
     } catch (error) {
         alert('Error actualizando pago: ' + error.message);
     }
@@ -1664,7 +1750,8 @@ async function aprobarTiendaExterna(id, nombre) {
         }).eq('id', id);
         if (error) throw error;
         alert(`✅ "${nombre}" ya está publicada en RomaHub.`);
-        location.reload();
+        tiendasPorAprobarData = tiendasPorAprobarData.filter(t => String(t.id) !== String(id));
+        await refrescarNegocio(id, { configurado: true, romahub_estado: 'aprobada', romahub_nota_rechazo: '' });
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
@@ -1681,7 +1768,8 @@ async function rechazarTiendaExterna(id, nombre) {
         }).eq('id', id);
         if (error) throw error;
         alert(`Tienda "${nombre}" rechazada. La dueña verá el motivo en su panel.`);
-        location.reload();
+        tiendasPorAprobarData = tiendasPorAprobarData.filter(t => String(t.id) !== String(id));
+        await refrescarNegocio(id, { romahub_estado: 'rechazada', romahub_nota_rechazo: motivo.trim().slice(0, 600) });
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
@@ -1890,7 +1978,7 @@ async function ocultarTiendaExterna(id, nombre) {
         const { error } = await window.supabase.from('negocios').update({ configurado: false }).eq('id', id);
         if (error) throw error;
         alert('✅ Tienda ocultada.');
-        location.reload();
+        await refrescarNegocio(id, { configurado: false });
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
@@ -1901,7 +1989,7 @@ async function activarTiendaExterna(id, nombre) {
         const { error } = await window.supabase.from('negocios').update({ configurado: true }).eq('id', id);
         if (error) throw error;
         alert(`✅ "${nombre}" vuelve a verse en RomaHub.`);
-        location.reload();
+        await refrescarNegocio(id, { configurado: true });
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }

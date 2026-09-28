@@ -89,4 +89,34 @@ const ordered = context.ordenarPorPrioridadComercial(businesses).map(item => ite
 assert.equal(ordered[0], 'paying-risk');
 assert.match(context.renderEmbudoComercial(), /Embudo comercial RservasRoma/);
 
-console.log('commercial-tracking: 11 assertions OK');
+// Mismo caso, pero con las filas que devuelve admin_actividad_negocios
+// (sql-admin-actividad-negocios.sql): tiene que dar exactamente lo mismo.
+const fila = (negocio_id, extra) => ({
+    negocio_id, configurado: true, es_tienda_externa: false,
+    profesionales: 1, servicios: 1, horarios: 1,
+    profesionales_ultima: isoDaysAgo(200), servicios_ultima: isoDaysAgo(200), horarios_ultima: isoDaysAgo(200),
+    reservas_total: 0, reservas_ultima_creada: null, reservas_30: 0, reservas_90: 0,
+    ultima_cita: null, proxima_cita: null, citas_futuras: 0,
+    ...extra,
+});
+const actividad = Object.fromEntries([
+    fila('active-unpaid', { updated_at: isoDaysAgo(4), reservas_total: 1, reservas_ultima_creada: isoDaysAgo(2), reservas_30: 1, reservas_90: 1, proxima_cita: dateDaysFromNow(2), citas_futuras: 1 }),
+    fila('paying-risk', { updated_at: isoDaysAgo(45), reservas_total: 1, reservas_ultima_creada: isoDaysAgo(45), reservas_90: 1, ultima_cita: dateDaysFromNow(-40) }),
+    fila('quick-schedule', { updated_at: isoDaysAgo(10), horarios: 0, horarios_ultima: null }),
+    fila('dormant-history', { updated_at: isoDaysAgo(150), reservas_total: 1, reservas_ultima_creada: isoDaysAgo(150), ultima_cita: dateDaysFromNow(-145) }),
+    fila('never-started', { configurado: false, updated_at: null, profesionales: 0, servicios: 0, horarios: 0, profesionales_ultima: null, servicios_ultima: null, horarios_ultima: null }),
+].map(f => [f.negocio_id, f]));
+
+// daysWithoutActivity depende del instante en que se calcula: se redondea.
+const foto = () => JSON.stringify(businesses.map(b => {
+    const a = context.obtenerAuditoriaComercial(b.id);
+    return { ...a, daysWithoutActivity: Math.round(a.daysWithoutActivity) };
+}));
+const antes = foto();
+context.supabase = { from() { throw new Error('con la RPC no se debe bajar ninguna tabla'); } };
+context.cargarActividadAdmin = async () => actividad;
+await context.cargarAuditoriaComercial(businesses);
+const despues = foto();
+assert.equal(despues, antes, 'la RPC da la misma auditoria que las tablas');
+
+console.log('commercial-tracking: 12 assertions OK');

@@ -109,75 +109,114 @@ function commercialActionFor({ segment, paying, futureAppointments, operational,
     return { priority: 'P4', diagnosis: 'Nunca inició la configuración', action: 'Calificar interés antes de hacer onboarding' };
 }
 
+// Datos por negocio desde admin_actividad_negocios (una fila por negocio,
+// calculada en la base). Es lo mismo que commercialDesdeTablas, sin bajar
+// ninguna tabla entera.
+function commercialDesdeActividad(actividad) {
+    const businessById = {};
+    const components = {};
+    const reservationStats = {};
+    Object.values(actividad).forEach(row => {
+        const id = String(row.negocio_id);
+        businessById[id] = row;
+        components[id] = {
+            professionals: row.profesionales || 0,
+            services: row.servicios || 0,
+            schedules: row.horarios || 0,
+            latestCreatedAt: [row.profesionales_ultima, row.servicios_ultima, row.horarios_ultima].reduce(commercialLatest, null),
+        };
+        reservationStats[id] = {
+            total: row.reservas_total || 0,
+            lastCreatedAt: row.reservas_ultima_creada || null,
+            reservations30: row.reservas_30 || 0,
+            reservations90: row.reservas_90 || 0,
+            lastPastAppointment: row.ultima_cita || null,
+            nextAppointment: row.proxima_cita || null,
+            futureAppointments: row.citas_futuras || 0,
+        };
+    });
+    return { businessById, components, reservationStats };
+}
+
+// Carga de antes: baja las tablas enteras y cuenta aqui. Se usa solo si aun no
+// se corrio sql-admin-actividad-negocios.sql.
+async function commercialDesdeTablas(now) {
+    const [businessRows, reservations, professionals, services, schedules] = await Promise.all([
+        commercialFetchAll('negocios', 'id,configurado,updated_at,codigo_pais,provincia,municipio,es_tienda_externa'),
+        commercialFetchAll('reservas', 'negocio_id,created_at,fecha,estado'),
+        commercialFetchAll('profesionales', 'negocio_id,created_at', query => query.eq('activo', true)),
+        commercialFetchAll('servicios', 'negocio_id,created_at', query => query.eq('activo', true)),
+        commercialFetchAll('horarios_profesionales', 'negocio_id,created_at,dias'),
+    ]);
+
+    const today = now.toISOString().slice(0, 10);
+    const cutoff30 = new Date(now.getTime() - 30 * COMMERCIAL_DAY_MS).toISOString();
+    const cutoff90 = new Date(now.getTime() - 90 * COMMERCIAL_DAY_MS).toISOString();
+    const businessById = Object.fromEntries(businessRows.map(row => [String(row.id), row]));
+    const components = {};
+    const reservationStats = {};
+
+    const ensureComponents = id => (components[id] ||= {
+        professionals: 0,
+        services: 0,
+        schedules: 0,
+        latestCreatedAt: null,
+    });
+    const ensureReservations = id => (reservationStats[id] ||= {
+        total: 0,
+        lastCreatedAt: null,
+        reservations30: 0,
+        reservations90: 0,
+        lastPastAppointment: null,
+        nextAppointment: null,
+        futureAppointments: 0,
+    });
+
+    professionals.forEach(row => {
+        if (!row.negocio_id) return;
+        const item = ensureComponents(String(row.negocio_id));
+        item.professionals++;
+        item.latestCreatedAt = commercialLatest(item.latestCreatedAt, row.created_at);
+    });
+    services.forEach(row => {
+        if (!row.negocio_id) return;
+        const item = ensureComponents(String(row.negocio_id));
+        item.services++;
+        item.latestCreatedAt = commercialLatest(item.latestCreatedAt, row.created_at);
+    });
+    schedules.forEach(row => {
+        if (!row.negocio_id) return;
+        const item = ensureComponents(String(row.negocio_id));
+        if (!Array.isArray(row.dias) || row.dias.length > 0) item.schedules++;
+        item.latestCreatedAt = commercialLatest(item.latestCreatedAt, row.created_at);
+    });
+    reservations.forEach(row => {
+        if (!row.negocio_id) return;
+        const item = ensureReservations(String(row.negocio_id));
+        item.total++;
+        item.lastCreatedAt = commercialLatest(item.lastCreatedAt, row.created_at);
+        if (row.created_at && row.created_at >= cutoff30) item.reservations30++;
+        if (row.created_at && row.created_at >= cutoff90) item.reservations90++;
+        if (!row.fecha || commercialIsCancelled(row.estado)) return;
+        if (row.fecha < today) {
+            if (!item.lastPastAppointment || row.fecha > item.lastPastAppointment) item.lastPastAppointment = row.fecha;
+        } else {
+            item.futureAppointments++;
+            if (!item.nextAppointment || row.fecha < item.nextAppointment) item.nextAppointment = row.fecha;
+        }
+    });
+    return { businessById, components, reservationStats };
+}
+
 async function cargarAuditoriaComercial(negocios = []) {
     commercialState.loading = true;
     commercialState.loadError = '';
     try {
-        const [businessRows, reservations, professionals, services, schedules] = await Promise.all([
-            commercialFetchAll('negocios', 'id,configurado,updated_at,codigo_pais,provincia,municipio,es_tienda_externa'),
-            commercialFetchAll('reservas', 'negocio_id,created_at,fecha,estado'),
-            commercialFetchAll('profesionales', 'negocio_id,created_at', query => query.eq('activo', true)),
-            commercialFetchAll('servicios', 'negocio_id,created_at', query => query.eq('activo', true)),
-            commercialFetchAll('horarios_profesionales', 'negocio_id,created_at,dias'),
-        ]);
-
         const now = new Date();
-        const today = now.toISOString().slice(0, 10);
-        const cutoff30 = new Date(now.getTime() - 30 * COMMERCIAL_DAY_MS).toISOString();
-        const cutoff90 = new Date(now.getTime() - 90 * COMMERCIAL_DAY_MS).toISOString();
-        const businessById = Object.fromEntries(businessRows.map(row => [String(row.id), row]));
-        const components = {};
-        const reservationStats = {};
-
-        const ensureComponents = id => (components[id] ||= {
-            professionals: 0,
-            services: 0,
-            schedules: 0,
-            latestCreatedAt: null,
-        });
-        const ensureReservations = id => (reservationStats[id] ||= {
-            total: 0,
-            lastCreatedAt: null,
-            reservations30: 0,
-            reservations90: 0,
-            lastPastAppointment: null,
-            nextAppointment: null,
-            futureAppointments: 0,
-        });
-
-        professionals.forEach(row => {
-            if (!row.negocio_id) return;
-            const item = ensureComponents(String(row.negocio_id));
-            item.professionals++;
-            item.latestCreatedAt = commercialLatest(item.latestCreatedAt, row.created_at);
-        });
-        services.forEach(row => {
-            if (!row.negocio_id) return;
-            const item = ensureComponents(String(row.negocio_id));
-            item.services++;
-            item.latestCreatedAt = commercialLatest(item.latestCreatedAt, row.created_at);
-        });
-        schedules.forEach(row => {
-            if (!row.negocio_id) return;
-            const item = ensureComponents(String(row.negocio_id));
-            if (!Array.isArray(row.dias) || row.dias.length > 0) item.schedules++;
-            item.latestCreatedAt = commercialLatest(item.latestCreatedAt, row.created_at);
-        });
-        reservations.forEach(row => {
-            if (!row.negocio_id) return;
-            const item = ensureReservations(String(row.negocio_id));
-            item.total++;
-            item.lastCreatedAt = commercialLatest(item.lastCreatedAt, row.created_at);
-            if (row.created_at && row.created_at >= cutoff30) item.reservations30++;
-            if (row.created_at && row.created_at >= cutoff90) item.reservations90++;
-            if (!row.fecha || commercialIsCancelled(row.estado)) return;
-            if (row.fecha < today) {
-                if (!item.lastPastAppointment || row.fecha > item.lastPastAppointment) item.lastPastAppointment = row.fecha;
-            } else {
-                item.futureAppointments++;
-                if (!item.nextAppointment || row.fecha < item.nextAppointment) item.nextAppointment = row.fecha;
-            }
-        });
+        const actividad = window.cargarActividadAdmin ? await window.cargarActividadAdmin() : null;
+        const { businessById, components, reservationStats } = actividad
+            ? commercialDesdeActividad(actividad)
+            : await commercialDesdeTablas(now);
 
         const audit = {};
         negocios.forEach(business => {
