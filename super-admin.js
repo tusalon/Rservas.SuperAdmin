@@ -1390,6 +1390,13 @@ function limpiarBusqueda() {
     actualizarListaNegocios();
 }
 
+// Desde los indicadores de arriba: filtra y baja hasta la lista.
+function verFiltro(estado) {
+    filtrarPorEstado(estado);
+    document.querySelector('[aria-label="Buscar y filtrar salones"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.verFiltro = verFiltro;
+
 function filtrarPorEstado(estado) {
     window.limpiarFiltroComercial?.(false);
     filtroActual = estado;
@@ -1452,8 +1459,9 @@ function actualizarBotonesFiltro() {
 }
 
 // ==================== ESTILO DEL PANEL ====================
-// Un solo vocabulario para todo el panel: el morado de marca solo en la accion
-// principal; rojo, ambar y verde solo para estados. Los botones miden 44 px en
+// Un solo vocabulario para todo el panel: el morado de marca en la cabecera y
+// en la accion principal; rojo, ambar y verde para estados; y un color propio
+// por zona de trabajo (ver AREAS). Los botones miden 44 px en
 // el movil (se usan con el pulgar) y 36 px en el PC, donde cabe mas.
 const UI = {
     btn: 'inline-flex items-center justify-center gap-1.5 rounded-md px-3 min-h-11 md:min-h-9 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600 disabled:opacity-50 disabled:cursor-wait',
@@ -1473,9 +1481,60 @@ const TONOS = {
     gris: 'bg-gray-100 text-gray-700 ring-gray-200',
 };
 
+// Punto de estado: el mismo color en la etiqueta del salon, en su filtro y en
+// su indicador de arriba, para reconocer un estado sin leerlo.
+const PUNTOS = {
+    rojo: 'bg-red-600',
+    ambar: 'bg-amber-500',
+    verde: 'bg-green-600',
+    morado: 'bg-purple-600',
+    gris: 'bg-gray-500',
+};
+
+function punto(tono) {
+    return `<span aria-hidden="true" class="inline-block w-2 h-2 rounded-full shrink-0 ${PUNTOS[tono] || PUNTOS.gris}"></span>`;
+}
+
 // texto: HTML ya seguro (los datos de la base se escapan antes de llegar aqui)
-function chip(texto, tono = 'gris') {
-    return `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap ${TONOS[tono] || TONOS.gris}">${texto}</span>`;
+function chip(texto, tono = 'gris', conPunto = false) {
+    return `<span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap ${TONOS[tono] || TONOS.gris}">${conPunto ? punto(tono) : ''}${texto}</span>`;
+}
+
+// Cada zona de trabajo tiene su color y su icono, y se repiten en "Hoy" y en
+// su seccion: azul es soporte, ambar cobros, rosa los salones que no pueden
+// recibir citas, naranja la actividad, morado lo comercial y verde azulado
+// RomaHub. Se sabe de que va una fila antes de leerla. Iconos de Lucide.
+const ICONOS = {
+    mensaje: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    billete: '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+    llave: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+    bajada: '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
+    persona: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>',
+    calendario: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    enviar: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+    tienda: '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/>',
+    embudo: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+};
+
+function icono(nombre, clases = 'w-5 h-5') {
+    return `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${clases} shrink-0">${ICONOS[nombre] || ''}</svg>`;
+}
+
+const AREAS = {
+    soporte: { nombre: 'Soporte', icono: 'mensaje', tile: 'bg-sky-100 text-sky-800', texto: 'text-sky-800', marca: 'bg-sky-500' },
+    cobro: { nombre: 'Cobros', icono: 'billete', tile: 'bg-amber-100 text-amber-900', texto: 'text-amber-900', marca: 'bg-amber-500' },
+    salud: { nombre: 'No reciben citas', icono: 'llave', tile: 'bg-rose-100 text-rose-800', texto: 'text-rose-800', marca: 'bg-rose-500' },
+    actividad: { nombre: 'Actividad', icono: 'bajada', tile: 'bg-orange-100 text-orange-800', texto: 'text-orange-800', marca: 'bg-orange-500' },
+    comercial: { nombre: 'Comercial', icono: 'persona', tile: 'bg-purple-100 text-purple-800', texto: 'text-purple-800', marca: 'bg-purple-600' },
+    seguimiento: { nombre: 'Comercial', icono: 'calendario', tile: 'bg-purple-100 text-purple-800', texto: 'text-purple-800', marca: 'bg-purple-600' },
+    escribir: { nombre: 'Comercial', icono: 'enviar', tile: 'bg-purple-100 text-purple-800', texto: 'text-purple-800', marca: 'bg-purple-600' },
+    romahub: { nombre: 'RomaHub', icono: 'tienda', tile: 'bg-teal-100 text-teal-800', texto: 'text-teal-800', marca: 'bg-teal-500' },
+    embudo: { nombre: 'Embudo', icono: 'embudo', tile: 'bg-purple-100 text-purple-800', texto: 'text-purple-800', marca: 'bg-purple-600' },
+};
+
+function tileArea(area, tamano = 'w-9 h-9') {
+    const a = AREAS[area] || AREAS.comercial;
+    return `<span class="${tamano} rounded-md ${a.tile} inline-flex items-center justify-center shrink-0">${icono(a.icono)}</span>`;
 }
 
 const ESTADO_SUSCRIPCION = {
@@ -1487,12 +1546,15 @@ const ESTADO_SUSCRIPCION = {
 
 const ICONO_FLECHA = '<svg aria-hidden="true" class="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.25 4.39a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd"/></svg>';
 
+// Boton sobre la cabecera morada.
+const BTN_OSCURO = `${UI.btn} bg-white/10 text-white border border-white/30 hover:bg-white/20`;
+
 // Menu desplegable con <details>: se cierra al tocar fuera, al elegir una
 // opcion o con Esc (ver instalarAtajos).
-function menuDesplegable(etiqueta, items, { alinear = 'right', ancho = 'w-64' } = {}) {
+function menuDesplegable(etiqueta, items, { alinear = 'right', ancho = 'w-64', boton = BTN_SEC } = {}) {
     return `
         <details class="relative" data-menu>
-            <summary class="${BTN_SEC} cursor-pointer list-none [&::-webkit-details-marker]:hidden">${etiqueta}${ICONO_FLECHA}</summary>
+            <summary class="${boton} cursor-pointer list-none [&::-webkit-details-marker]:hidden">${etiqueta}${ICONO_FLECHA}</summary>
             <div role="menu" class="absolute ${alinear === 'left' ? 'left-0' : 'right-0'} z-30 mt-1 ${ancho} ${UI.panel} shadow-lg py-1">${items}</div>
         </details>`;
 }
@@ -1521,10 +1583,11 @@ function abrirSeccion(clave) {
 }
 window.abrirSeccion = abrirSeccion;
 
-function panelPlegable(clave, titulo, resumen, contenido, urgente = false) {
+function panelPlegable(clave, area, titulo, resumen, contenido, urgente = false) {
     return `
         <details id="seccion-${clave}" class="${UI.panel} mb-2 scroll-mt-4 group" ${seccionesAbiertas[clave] ? 'open' : ''} ontoggle="recordarSeccion('${clave}', this.open)">
-            <summary class="flex items-center gap-3 px-4 min-h-12 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden rounded-lg hover:bg-gray-50">
+            <summary class="flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden rounded-lg hover:bg-gray-50">
+                ${tileArea(area, 'w-8 h-8')}
                 <span class="font-semibold text-gray-900 shrink-0">${titulo}</span>
                 <span class="text-sm ${urgente ? 'text-red-700 font-medium' : 'text-gray-600'} flex-1 min-w-0 truncate">${resumen}</span>
                 <span class="text-gray-500 transition-transform group-open:rotate-180">${ICONO_FLECHA}</span>
@@ -1785,18 +1848,18 @@ function _filaCobro(item, tipo) {
 
 function renderSeccionCobros() {
     const { bloqueados, porCobrar, heredados } = calcularCobros(negociosData.filter(n => n.archivado !== true));
-    const grupo = (titulo, nota, filas, vacio) => `
+    const grupo = (titulo, nota, filas, vacio, tono) => `
         <div class="py-2">
-            <h3 class="text-sm font-semibold text-gray-900">${titulo}</h3>
+            <h3 class="flex items-center gap-1.5 text-sm font-semibold text-gray-900">${punto(tono)}${titulo}</h3>
             <p class="text-sm text-gray-600">${nota}</p>
             ${filas.length ? `<ul class="divide-y divide-gray-200">${filas.join('')}</ul>` : `<p class="py-2 text-sm text-gray-600">${vacio}</p>`}
         </div>`;
     return `
         <div class="grid grid-cols-1 lg:grid-cols-2 lg:gap-6 divide-y divide-gray-200 lg:divide-y-0">
             ${grupo(`Bloqueados ahora (${bloqueados.length})`, 'No pueden entrar a su panel. Sus clientas sí reservan.',
-                bloqueados.map(i => _filaCobro(i, 'bloqueado')), 'Ninguno.')}
+                bloqueados.map(i => _filaCobro(i, 'bloqueado')), 'Ninguno.', 'rojo')}
             ${grupo(`Por cobrar esta semana (${porCobrar.length})`, 'La app ya les avisa 3, 2 y 1 día antes.',
-                porCobrar.map(i => _filaCobro(i, 'porcobrar')), 'Nadie vence en 7 días.')}
+                porCobrar.map(i => _filaCobro(i, 'porcobrar')), 'Nadie vence en 7 días.', 'ambar')}
         </div>
         ${heredados ? `<p class="py-2 text-sm text-gray-600">${heredados} salones tienen fechas anteriores al ${_fechaCorta(FECHA_CORTE_COBRO)} (pruebas viejas): el sistema los ignora y no los bloquea hasta que les registres un pago.</p>` : ''}
     `;
@@ -2376,7 +2439,7 @@ function calcularBandejaHoy() {
 
     ticketsSoporteData.filter(t => t.estado !== 'resuelto').forEach(t => agregar({
         peso: t.estado === 'nuevo' ? 0 : 1,
-        tipo: 'Soporte', tono: 'rojo',
+        tipo: 'Soporte', area: 'soporte',
         titulo: t.negocio_nombre || '(sin salón)',
         detalle: `${t.estado === 'nuevo' ? 'Sin leer · ' : ''}${fechaSoporte(t.created_at)} · ${recorte(t.mensaje, 110)}`,
         acciones: [
@@ -2389,14 +2452,14 @@ function calcularBandejaHoy() {
     // recupera). Lo mas viejo sigue en la seccion Cobros.
     const { bloqueados, porCobrar } = calcularCobros(salones);
     bloqueados.filter(i => i.motivo === 'vencida' && i.dias >= -7).forEach(i => agregar({
-        peso: 2, tipo: 'Cobro', tono: 'rojo', negocioId: i.n.id, titulo: i.n.nombre,
+        peso: 2, tipo: 'Cobro', area: 'cobro', urgente: true, negocioId: i.n.id, titulo: i.n.nombre,
         detalle: i.dias === 0
             ? 'Vence hoy: ya no puede entrar a su panel'
             : `Venció hace ${-i.dias} ${-i.dias === 1 ? 'día' : 'días'}: no puede entrar a su panel`,
         acciones: [enlaceWhatsApp(i.n, 'WhatsApp', 'vence'), botonRegistrarPago(i.n)],
     }));
     porCobrar.filter(i => i.dias === 1).forEach(i => agregar({
-        peso: 3, tipo: 'Cobro', tono: 'ambar', negocioId: i.n.id, titulo: i.n.nombre,
+        peso: 3, tipo: 'Cobro', area: 'cobro', negocioId: i.n.id, titulo: i.n.nombre,
         detalle: 'Vence mañana',
         acciones: [enlaceWhatsApp(i.n, 'WhatsApp', 'vence'), botonRegistrarPago(i.n)],
     }));
@@ -2409,7 +2472,7 @@ function calcularBandejaHoy() {
         const dias = diasHastaPago(seguimiento.proximo_seguimiento);
         if (dias == null || dias > 0) return;
         agregar({
-            peso: 3.5, tipo: 'Seguimiento', tono: 'morado', negocioId: n.id, titulo: n.nombre,
+            peso: 3.5, tipo: 'Seguimiento', area: 'seguimiento', negocioId: n.id, titulo: n.nombre,
             detalle: `${dias === 0 ? 'Toca hoy' : `Tocaba hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`}${seguimiento.notas ? ` · ${recorte(seguimiento.notas, 90)}` : ''}`,
             acciones: [
                 enlaceWhatsApp(n),
@@ -2419,7 +2482,7 @@ function calcularBandejaHoy() {
     });
 
     calcularSalud(salones).criticos.filter(c => c.n.estado_suscripcion === 'activa').forEach(c => agregar({
-        peso: 4, tipo: 'No recibe citas', tono: 'rojo', negocioId: c.n.id, titulo: c.n.nombre,
+        peso: 4, tipo: 'No recibe citas', area: 'salud', urgente: true, negocioId: c.n.id, titulo: c.n.nombre,
         detalle: `Paga y no puede recibir reservas: ${c.problemas.join(', ')}`,
         acciones: [enlaceWhatsApp(c.n)],
     }));
@@ -2429,7 +2492,7 @@ function calcularBandejaHoy() {
         const baja = bajaActividad(n);
         if (!baja) return;
         agregar({
-            peso: 4.5, tipo: 'Bajó su actividad', tono: 'ambar', negocioId: n.id, titulo: n.nombre,
+            peso: 4.5, tipo: 'Bajó su actividad', area: 'actividad', negocioId: n.id, titulo: n.nombre,
             detalle: `Esta semana sacó ${baja.semana} ${baja.semana === 1 ? 'cita' : 'citas'}; lo normal son unas ${baja.media}.`,
             acciones: [enlaceWhatsApp(n, 'WhatsApp', 'bajo_actividad')],
         });
@@ -2441,7 +2504,7 @@ function calcularBandejaHoy() {
         const seguimiento = window.obtenerSeguimientoComercial?.(n.id) || {};
         if ((seguimiento.prioridad_manual || auditoria.priority) !== 'P0') return;
         agregar({
-            peso: 5, tipo: 'Retención', tono: 'morado', negocioId: n.id, titulo: n.nombre,
+            peso: 5, tipo: 'Retención', area: 'comercial', negocioId: n.id, titulo: n.nombre,
             detalle: `${auditoria.diagnosis}. ${auditoria.action}.`,
             acciones: [
                 enlaceWhatsApp(n),
@@ -2463,7 +2526,7 @@ function calcularBandejaHoy() {
         .sort((a, b) => (b.auditoria.futureAppointments || 0) - (a.auditoria.futureAppointments || 0))
         .slice(0, 5)
         .forEach(({ n, auditoria }) => agregar({
-            peso: 5.5, tipo: 'Escribir hoy', tono: 'morado', negocioId: n.id, titulo: n.nombre,
+            peso: 5.5, tipo: 'Escribir hoy', area: 'escribir', negocioId: n.id, titulo: n.nombre,
             detalle: `${auditoria.diagnosis}. ${auditoria.action}.`,
             acciones: [
                 enlaceWhatsApp(n),
@@ -2472,7 +2535,7 @@ function calcularBandejaHoy() {
         }));
 
     tiendasPorAprobarData.forEach(t => agregar({
-        peso: 6, tipo: 'RomaHub', tono: 'ambar', titulo: t.nombre,
+        peso: 6, tipo: 'RomaHub', area: 'romahub', titulo: t.nombre,
         detalle: `Tienda esperando aprobación · ${(t.productos || []).length + (t.cursos || []).length} artículos`,
         acciones: [`<button type="button" onclick="abrirSeccion('tiendas')" class="${BTN_PRI}">Revisar</button>`],
     }));
@@ -2481,17 +2544,34 @@ function calcularBandejaHoy() {
 }
 
 function filaBandeja(fila) {
+    const area = AREAS[fila.area] || AREAS.comercial;
     return `
-        <li class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-3">
-            <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 min-w-0">
-                    ${chip(fila.tipo, fila.tono)}
-                    <span class="font-medium text-gray-900 truncate">${escapeHtml(fila.titulo || '(sin nombre)')}</span>
+        <li class="flex gap-3 py-3">
+            ${tileArea(fila.area)}
+            <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <div class="min-w-0 flex-1">
+                    <p class="text-xs font-semibold ${area.texto}">${fila.tipo}</p>
+                    <p class="font-medium text-gray-900 truncate">${escapeHtml(fila.titulo || '(sin nombre)')}</p>
+                    <p class="mt-0.5 text-sm ${fila.urgente ? 'text-red-700' : 'text-gray-600'} break-words">${escapeHtml(fila.detalle)}</p>
                 </div>
-                <p class="mt-1 text-sm text-gray-600 break-words">${escapeHtml(fila.detalle)}</p>
+                <div class="flex flex-wrap gap-2 sm:shrink-0">${fila.acciones.filter(Boolean).join('')}</div>
             </div>
-            <div class="flex flex-wrap gap-2 sm:shrink-0">${fila.acciones.filter(Boolean).join('')}</div>
         </li>`;
+}
+
+// Cuantas filas hay de cada zona, con su color: de un vistazo se ve si hoy
+// toca sobre todo cobrar, contestar o ayudar a configurar.
+function resumenPorZona(filas) {
+    const cuenta = new Map();
+    filas.forEach(f => {
+        const nombre = (AREAS[f.area] || AREAS.comercial).nombre;
+        const actual = cuenta.get(nombre) || { total: 0, marca: (AREAS[f.area] || AREAS.comercial).marca };
+        actual.total++;
+        cuenta.set(nombre, actual);
+    });
+    if (!cuenta.size) return '';
+    return `<p class="flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-700">${[...cuenta].map(([nombre, { total, marca }]) =>
+        `<span class="inline-flex items-center gap-1.5"><span aria-hidden="true" class="w-2.5 h-2.5 rounded-sm ${marca}"></span>${nombre} <span class="tabular-nums font-medium">${total}</span></span>`).join('')}</p>`;
 }
 
 function renderBandejaHoy() {
@@ -2507,9 +2587,9 @@ function renderBandejaHoy() {
             : 'Nada urgente: no hay mensajes sin responder, cobros de hoy ni salones de pago sin funcionar.'}</p>`;
     return `
         <section class="${UI.panel} mb-4" aria-labelledby="titulo-hoy">
-            <div class="flex items-baseline justify-between gap-3 px-4 pt-3">
-                <h2 id="titulo-hoy" class="text-base font-semibold text-gray-900">Hoy</h2>
-                <span class="text-sm text-gray-600">${filas.length ? `${filas.length} por atender` : ''}</span>
+            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 pt-3">
+                <h2 id="titulo-hoy" class="text-base font-semibold text-gray-900">Hoy${filas.length ? ` <span class="font-normal text-gray-600">· ${filas.length} por atender</span>` : ''}</h2>
+                ${resumenPorZona(filas)}
             </div>
             <div class="px-4 pb-3">${cuerpo}</div>
         </section>`;
@@ -2539,16 +2619,21 @@ function renderHeader() {
         ? `datos de las ${datosActualizadosEn.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
         : 'cargando datos…';
 
-    const kpi = (valor, etiqueta) => `
-        <div class="bg-white px-3 py-2.5">
-            <dt class="text-xs text-gray-600">${etiqueta}</dt>
-            <dd class="mt-0.5 text-lg font-semibold text-gray-900 tabular-nums">${valor}</dd>
-        </div>`;
+    // Los indicadores de estado llevan a su filtro (o a Cobros): el numero de
+    // arriba es la puerta a esos salones, no solo un dato.
+    const kpi = (valor, etiqueta, { tono = '', accion = '' } = {}) => {
+        const contenido = `
+            <span class="flex items-center gap-1.5 text-xs text-gray-600">${tono ? punto(tono) : ''}${etiqueta}</span>
+            <span class="block mt-0.5 text-lg font-semibold text-gray-900 tabular-nums">${valor}</span>`;
+        return accion
+            ? `<button type="button" onclick="${accion}" class="bg-white px-3 py-2.5 text-left hover:bg-gray-50 focus-visible:outline-offset-[-2px]">${contenido}</button>`
+            : `<div class="bg-white px-3 py-2.5">${contenido}</div>`;
+    };
 
-    const filtro = (clave, etiqueta) => `
+    const filtro = (clave, etiqueta, tono = '') => `
         <button type="button" data-filtro="${clave}" aria-pressed="${filtroActual === clave}" onclick="filtrarPorEstado('${clave}')"
-            class="inline-flex items-center gap-1 shrink-0 rounded-full border px-3 min-h-11 md:min-h-9 text-sm font-medium ${filtroActual === clave ? CHIP_FILTRO_ON.join(' ') : CHIP_FILTRO_OFF.join(' ')}">
-            ${etiqueta} <span class="tabular-nums opacity-80">${totalPorEstado[clave]}</span>
+            class="inline-flex items-center gap-1.5 shrink-0 rounded-full border px-3 min-h-11 md:min-h-9 text-sm font-medium ${filtroActual === clave ? CHIP_FILTRO_ON.join(' ') : CHIP_FILTRO_OFF.join(' ')}">
+            ${tono ? punto(tono) : ''}${etiqueta} <span class="tabular-nums opacity-80">${totalPorEstado[clave]}</span>
         </button>`;
 
     const filtroComercialActivo = window.hayFiltroComercialActivo ? window.hayFiltroComercialActivo() : false;
@@ -2560,14 +2645,17 @@ function renderHeader() {
     const tiendasExternas = negociosData.filter(n => n.es_tienda_externa === true).length;
 
     const headerHtml = `
-        <header class="bg-white border-b border-gray-200">
+        <header class="bg-purple-900 text-white">
             <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                <div class="min-w-0">
-                    <h1 class="text-lg font-semibold text-gray-900">SuperAdmin RservasRoma</h1>
-                    <p class="text-sm text-gray-600">${fechaActual} · ${horaDatos}</p>
+                <div class="flex items-center gap-3 min-w-0">
+                    <img src="icons/icon-72x72.png" alt="" width="36" height="36" class="w-9 h-9 rounded-md bg-white shrink-0">
+                    <div class="min-w-0">
+                        <h1 class="text-lg font-semibold">SuperAdmin RservasRoma</h1>
+                        <p class="text-sm text-purple-100">${fechaActual} · ${horaDatos}</p>
+                    </div>
                 </div>
                 <div class="flex gap-2">
-                    <button type="button" onclick="location.reload()" class="${BTN_SEC}">Recargar</button>
+                    <button type="button" onclick="location.reload()" class="${BTN_OSCURO}">Recargar</button>
                     ${menuDesplegable('Más', `
                         <p class="px-3 pt-1 text-xs font-semibold text-gray-600">Avisos a las apps</p>
                         ${itemMenu('Aviso a activos y en prueba', "notificarATodos(this, 'en_uso')")}
@@ -2580,41 +2668,41 @@ function renderHeader() {
                         <div role="separator" class="my-1 border-t border-gray-200"></div>
                         ${itemMenu('Exportar lista a CSV', 'exportarCSV()')}
                         ${itemMenu('Cerrar sesión', 'logout()')}
-                    `, { ancho: 'w-72' })}
+                    `, { ancho: 'w-72', boton: BTN_OSCURO })}
                 </div>
             </div>
         </header>
 
         <div class="max-w-6xl mx-auto px-4 pt-4">
-            <dl class="mb-4 grid grid-cols-3 md:grid-cols-6 gap-px overflow-hidden rounded-lg border border-gray-200 bg-gray-200">
+            <div class="mb-4 grid grid-cols-3 md:grid-cols-6 gap-px overflow-hidden rounded-lg border border-gray-200 bg-gray-200">
                 ${kpi(reservasDiarias ?? '—', 'Citas sacadas hoy')}
                 ${kpi(stats.reservasMes, 'Citas este mes')}
-                ${kpi(stats.activos, 'Activos')}
-                ${kpi(stats.trial, 'En prueba')}
-                ${kpi(stats.suspendidos, 'Suspendidos')}
-                ${kpi(stats.porVencer, 'Vencen en 7 días')}
-            </dl>
+                ${kpi(stats.activos, 'Activos', { tono: 'verde', accion: "verFiltro('activa')" })}
+                ${kpi(stats.trial, 'En prueba', { tono: 'ambar', accion: "verFiltro('trial')" })}
+                ${kpi(stats.suspendidos, 'Suspendidos', { tono: 'rojo', accion: "verFiltro('suspendida')" })}
+                ${kpi(stats.porVencer, 'Vencen en 7 días', { tono: 'ambar', accion: "abrirSeccion('cobros')" })}
+            </div>
 
             ${renderBandejaHoy()}
 
             ${avisoErrorCarga('soporte')}${avisoErrorCarga('tiendas')}${avisoErrorCarga('reportes')}
 
             <div class="mb-4">
-                ${ticketsSoporteData.length ? panelPlegable('soporte', 'Soporte',
+                ${ticketsSoporteData.length ? panelPlegable('soporte', 'soporte', 'Soporte',
                     ticketsPendientes ? `${ticketsPendientes} sin resolver` : 'Todo resuelto',
                     renderSeccionSoporte(), ticketsPendientes > 0) : ''}
-                ${tiendasPorAprobarData.length ? panelPlegable('tiendas', 'Tiendas por aprobar',
+                ${tiendasPorAprobarData.length ? panelPlegable('tiendas', 'romahub', 'Tiendas por aprobar',
                     `${tiendasPorAprobarData.length} esperando revisión`, renderTiendasPorAprobar(), true) : ''}
-                ${panelPlegable('cobros', 'Cobros',
+                ${panelPlegable('cobros', 'cobro', 'Cobros',
                     `${bloqueados.length} bloqueados · ${porCobrar.length} por cobrar esta semana`,
                     renderSeccionCobros(), bloqueados.length > 0)}
-                ${salud.totalConProblemas ? panelPlegable('salud', 'Salones que necesitan ayuda',
+                ${salud.totalConProblemas ? panelPlegable('salud', 'salud', 'Salones que necesitan ayuda',
                     `${salud.criticos.length} urgentes · ${salud.totalConProblemas} con algo pendiente`,
                     renderSeccionSalud()) : ''}
-                ${(tiendasExternas || reportesPendientes) ? panelPlegable('romahub', 'RomaHub',
+                ${(tiendasExternas || reportesPendientes) ? panelPlegable('romahub', 'romahub', 'RomaHub',
                     `${tiendasExternas} tiendas${reportesPendientes ? ` · ${reportesPendientes} reportes sin revisar` : ''}`,
                     renderSeccionRomaHub(), reportesPendientes > 0) : ''}
-                ${panelPlegable('embudo', 'Embudo comercial', 'Retención, cierre y activación',
+                ${panelPlegable('embudo', 'embudo', 'Embudo comercial', 'Retención, cierre y activación',
                     window.renderEmbudoComercial ? window.renderEmbudoComercial() : '')}
             </div>
 
@@ -2639,11 +2727,11 @@ function renderHeader() {
                 </div>
                 <div role="group" aria-label="Filtrar por estado" class="mt-2 -mx-4 px-4 flex gap-2 overflow-x-auto pb-1 md:mx-0 md:px-0 md:flex-wrap md:overflow-visible">
                     ${filtro('todos', 'Todos')}
-                    ${filtro('activa', 'Activos')}
-                    ${filtro('trial', 'En prueba')}
-                    ${filtro('suspendida', 'Suspendidos')}
-                    ${filtro('pendiente', 'Marcados')}
-                    ${filtro('inactiva', 'Bajas')}
+                    ${filtro('activa', 'Activos', 'verde')}
+                    ${filtro('trial', 'En prueba', 'ambar')}
+                    ${filtro('suspendida', 'Suspendidos', 'rojo')}
+                    ${filtro('pendiente', 'Marcados', 'morado')}
+                    ${filtro('inactiva', 'Bajas', 'gris')}
                     ${filtro('eliminados', 'Ocultos')}
                     ${filtro('archivados', 'Archivados')}
                 </div>
@@ -2750,10 +2838,10 @@ function tarjetaNegocio(n, posicion) {
         <article class="${UI.panel} p-4">
             <div class="flex flex-wrap items-center gap-2">
                 <h2 class="text-base font-semibold text-gray-900 break-words min-w-0">${nombreMostrado}</h2>
-                ${chip(estadoTexto, estadoTono)}
+                ${chip(estadoTexto, estadoTono, true)}
                 ${badgeWizard(n)}
                 ${reservasHoy > 0 ? chip(`+${reservasHoy} hoy`, 'morado') : ''}
-                ${esPendiente ? chip('Marcado', 'morado') : ''}
+                ${esPendiente ? chip('Marcado', 'morado', true) : ''}
                 ${esEliminado ? chip('Oculto', 'gris') : ''}
             </div>
             <p class="mt-1 text-sm text-gray-600 break-words">
