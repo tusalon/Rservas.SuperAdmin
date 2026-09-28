@@ -9,7 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Version fija y con integrity: este panel puede borrar salones, no debe cargar
+         codigo que cambie solo. Para actualizar: nueva version + nuevo hash sha384. -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
     <style>
         .fade-in {
             animation: fadeIn 0.3s ease-in;
@@ -47,9 +49,9 @@
          Si aqui se usara otra version, podrian generarse hashes que el login no
          sabe comprobar y el salon quedaria fuera de su propio panel. -->
     <script src="vendor/bcrypt.min.js?v=20260809-cambiar-clave"></script>
-    <script src="supabase-config.js?v=20260620-nube-v1"></script>
+    <script src="supabase-config.js?v=20260927-seguridad1"></script>
     <script src="commercial-tracking.js?v=20260728-embudo-v1"></script>
-    <script src="super-admin.js?v=20260905-soporte1"></script>
+    <script src="super-admin.js?v=20260927-seguridad1"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').then(reg => {

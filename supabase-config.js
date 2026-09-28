@@ -11,8 +11,8 @@ window.supabase = window.supabase.createClient(
     SUPABASE_ANON_KEY
 );
 
-window.GH_TOKEN = localStorage.getItem('gh_token_superadmin') || '';
-window.GH_OWNER = 'tusalon';
-window.GH_SUPERADMIN_REPO = 'Rservas.SuperAdmin';
+// El panel ya no lanza workflows de GitHub: se borra el token que quedo
+// guardado, para que nada en esta pagina pueda leerlo.
+try { localStorage.removeItem('gh_token_superadmin'); } catch (e) {}
 
 console.log('✅ Configuración de Supabase cargada correctamente');

@@ -15,9 +15,10 @@
 -- En vez de eso, esta funcion es la UNICA puerta: sabe hacer una sola cosa —
 -- "vaciar este negocio" — y corre con permisos del dueno de la base
 -- (security definer), asi que las tablas siguen cerradas para todo lo demas.
--- Solo pueden llamarla las cuentas que inician sesion en el SuperAdmin
--- (rol authenticated). Los salones NO usan Supabase Auth — entran con su
--- contrasena contra negocios.password_hash — asi que quedan fuera.
+-- Solo puede llamarla la cuenta del SuperAdmin: rol authenticated Y el email
+-- rservasroma@gmail.com (se comprueba dentro). Los salones NO usan Supabase
+-- Auth — entran con su contrasena contra negocios.password_hash — asi que
+-- quedan fuera.
 --
 -- Cubre los dos botones del panel, que hacian el mismo recorrido de tablas:
 --   p_borrar_negocio = false -> "Reiniciar cuenta": vacia los datos pero deja
@@ -62,6 +63,14 @@ declare
     'roma_finanzas_config'
   ];
 begin
+  -- Solo la cuenta del SuperAdmin. "authenticated" no basta: si el registro de
+  -- usuarios de Supabase quedara abierto, cualquiera con la clave publica
+  -- podria crearse una cuenta y borrar cualquier salon (27-09-2026).
+  if lower(coalesce(auth.jwt() ->> 'email', '')) <> 'rservasroma@gmail.com' then
+    raise exception 'Solo el SuperAdmin puede reiniciar o borrar un negocio'
+      using errcode = '42501';
+  end if;
+
   if p_negocio_id is null then
     raise exception 'Falta el negocio a reiniciar';
   end if;
@@ -112,4 +121,4 @@ revoke all on function public.reiniciar_negocio(uuid, boolean) from public, anon
 grant execute on function public.reiniciar_negocio(uuid, boolean) to authenticated;
 
 comment on function public.reiniciar_negocio(uuid, boolean) is
-'Vacia los datos de un negocio (incluido RomaFinanzas) y, si se pide, borra tambien su ficha. Unica via para tocar las tablas de finanzas desde el SuperAdmin; solo la pueden llamar cuentas autenticadas.';
+'Vacia los datos de un negocio (incluido RomaFinanzas) y, si se pide, borra tambien su ficha. Unica via para tocar las tablas de finanzas desde el SuperAdmin; solo la puede llamar la cuenta rservasroma@gmail.com.';
