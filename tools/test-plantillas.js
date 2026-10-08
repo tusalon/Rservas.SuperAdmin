@@ -23,6 +23,7 @@ const enDias = n => {
 
 const contexto = {
     FECHA_CORTE_COBRO: '2026-07-19',
+    PRECIO_MENSUAL: 1000,
     actividadPorNegocio: {},
     problemas: {},
     auditoria: {},
@@ -81,6 +82,55 @@ assert.equal(sugerirPlantilla(salon('va_bien')), 'referido');
 contexto.actividadPorNegocio.va_bien.finanzas_cobros_30 = 0;
 assert.equal(sugerirPlantilla(salon('va_bien')), 'finanzas', 'paga, va bien y no usa Finanzas');
 assert.equal(sugerirPlantilla(salon('otro', { estado_suscripcion: 'trial' })), 'saludo');
+
+// --- Cumpleaños de las duenas (descuento del 30 % en su mes)
+{
+    const {
+        cumpleDuena, proximoCumpleDuena, descuentoCumplePendiente, cumpleCercano, montoConDescuentoCumple
+    } = contexto;
+    const hoy = new Date(2026, 9, 7); // 7 de octubre de 2026
+    const f = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    assert.equal(cumpleDuena({}), null, 'sin cumpleaños no hay nada');
+    assert.equal(cumpleDuena({ cumple_admin_dia: 5, cumple_admin_mes: 13 }), null);
+    assert.equal(JSON.stringify(cumpleDuena({ cumple_admin_dia: '5', cumple_admin_mes: '10' })), JSON.stringify({ dia: 5, mes: 10 }));
+
+    // En su mes y sin descuento aplicado este año: pendiente
+    assert.equal(descuentoCumplePendiente({ cumple_admin_dia: 20, cumple_admin_mes: 10 }, hoy), true);
+    assert.equal(descuentoCumplePendiente({ cumple_admin_dia: 20, cumple_admin_mes: 10, cumple_descuento_anio: 2025 }, hoy), true, 'el del año pasado no cuenta');
+    assert.equal(descuentoCumplePendiente({ cumple_admin_dia: 20, cumple_admin_mes: 10, cumple_descuento_anio: 2026 }, hoy), false, 'ya aplicado este año');
+    assert.equal(descuentoCumplePendiente({ cumple_admin_dia: 20, cumple_admin_mes: 11 }, hoy), false, 'otro mes');
+
+    // Proximo cumpleaños
+    assert.equal(proximoCumpleDuena({ cumple_admin_dia: 7, cumple_admin_mes: 10 }, hoy).dias, 0, 'hoy cuenta');
+    assert.equal(proximoCumpleDuena({ cumple_admin_dia: 8, cumple_admin_mes: 10 }, hoy).dias, 1);
+    assert.equal(f(proximoCumpleDuena({ cumple_admin_dia: 6, cumple_admin_mes: 10 }, hoy).fecha), '2027-10-06', 'ya paso: el del año siguiente');
+    assert.equal(proximoCumpleDuena({ cumple_admin_dia: 2, cumple_admin_mes: 1 }, new Date(2026, 11, 30)).dias, 3, 'cruza el fin de año');
+    assert.equal(f(proximoCumpleDuena({ cumple_admin_dia: 29, cumple_admin_mes: 2 }, hoy).fecha), '2027-02-28', '29-feb en año no bisiesto');
+    assert.equal(f(proximoCumpleDuena({ cumple_admin_dia: 29, cumple_admin_mes: 2 }, new Date(2027, 11, 1)).fecha), '2028-02-29');
+
+    // "Cercano": en su mes pendiente, o en los proximos 7 dias y sin descuento de ese año
+    assert.equal(cumpleCercano({ cumple_admin_dia: 20, cumple_admin_mes: 10 }, hoy), true, 'en su mes');
+    assert.equal(cumpleCercano({ cumple_admin_dia: 12, cumple_admin_mes: 10, cumple_descuento_anio: 2026 }, hoy), false, 'ya aplicado');
+    assert.equal(cumpleCercano({ cumple_admin_dia: 2, cumple_admin_mes: 11 }, new Date(2026, 9, 30)), true, 'faltan 3 dias y es el mes siguiente');
+    assert.equal(cumpleCercano({ cumple_admin_dia: 20, cumple_admin_mes: 11 }, hoy), false, 'falta mas de una semana y no es su mes');
+    assert.equal(cumpleCercano({ cumple_admin_dia: 2, cumple_admin_mes: 1, cumple_descuento_anio: 2026 }, new Date(2026, 11, 30)), true, 'el descuento de 2026 no cubre el cumple de enero de 2027');
+    assert.equal(cumpleCercano({ cumple_admin_dia: 2, cumple_admin_mes: 1, cumple_descuento_anio: 2027 }, new Date(2026, 11, 30)), false, 'ya aplicado para ese cumple');
+
+    assert.equal(montoConDescuentoCumple(), 700, '30 % sobre 1000');
+}
+
+// La plantilla de cumpleaños gana a las demas salvo que el pago venza en 3 dias
+{
+    const ahora = new Date();
+    const delMes = { cumple_admin_dia: 15, cumple_admin_mes: ahora.getMonth() + 1 };
+    assert.equal(sugerirPlantilla(salon('cumple', delMes)), 'cumpleanos');
+    assert.equal(sugerirPlantilla(salon('cumple2', { ...delMes, proximo_pago: enDias(1) })), 'vence', 'si vence en 1 dia, primero eso');
+    assert.equal(sugerirPlantilla(salon('cumple3', { ...delMes, cumple_descuento_anio: ahora.getFullYear() })), 'saludo', 'ya aplicado: vuelve a lo de siempre');
+    const texto = PLANTILLAS.cumpleanos.texto(salon('x', delMes));
+    assert.ok(/30 %/.test(texto), 'dice el 30 %');
+    assert.ok(!/CUP|USD|\$\s*\d|\d+\s*pesos/i.test(texto), 'sin precios');
+}
 
 // --- Ninguna plantilla lleva precio ni contrasena, y todas tutean
 Object.entries(PLANTILLAS).forEach(([clave, plantilla]) => {

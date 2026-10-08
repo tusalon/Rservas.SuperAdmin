@@ -183,7 +183,9 @@ async function cargarNegocios() {
         // cada tarjeta.
         const extrasPromise = traerExtrasNegocios([
             'id', 'sitio_web', 'ntfy_topic', 'es_tienda_externa',
-            'archivado', 'romahub_estado', 'romahub_nota_rechazo', 'configurado'
+            'archivado', 'romahub_estado', 'romahub_nota_rechazo', 'configurado',
+            // sql-cumpleanos.sql (rservasroma): si aun no existen, se ignoran
+            'cumple_admin_dia', 'cumple_admin_mes', 'cumple_descuento_anio'
         ]);
 
         // Para "Salones que necesitan ayuda": sin servicios, sin horarios o con
@@ -239,7 +241,10 @@ async function cargarNegocios() {
                 archivado: extrasPorId[n.id]?.archivado === true,
                 romahub_estado: extrasPorId[n.id]?.romahub_estado || 'aprobada',
                 romahub_nota_rechazo: extrasPorId[n.id]?.romahub_nota_rechazo || '',
-                configurado: extrasPorId[n.id]?.configurado === true
+                configurado: extrasPorId[n.id]?.configurado === true,
+                cumple_admin_dia: extrasPorId[n.id]?.cumple_admin_dia ?? null,
+                cumple_admin_mes: extrasPorId[n.id]?.cumple_admin_mes ?? null,
+                cumple_descuento_anio: extrasPorId[n.id]?.cumple_descuento_anio ?? null
             }));
         }
 
@@ -517,7 +522,7 @@ function actualizarBotonOrden() {
 // Despues de una accion se vuelve a leer SOLO ese negocio y se repinta. Antes
 // era location.reload(): con internet de Cuba bajaba todo el panel otra vez y
 // se perdian el scroll, el filtro y la busqueda.
-const CAMPOS_EXTRA_NEGOCIO = ['sitio_web', 'ntfy_topic', 'es_tienda_externa', 'archivado', 'romahub_estado', 'romahub_nota_rechazo', 'configurado'];
+const CAMPOS_EXTRA_NEGOCIO = ['sitio_web', 'ntfy_topic', 'es_tienda_externa', 'archivado', 'romahub_estado', 'romahub_nota_rechazo', 'configurado', 'cumple_admin_dia', 'cumple_admin_mes', 'cumple_descuento_anio'];
 
 function repintarPanel() {
     renderHeader();
@@ -530,7 +535,8 @@ async function refrescarNegocio(id, cambiosLocales = {}) {
     const i = negociosData.findIndex(n => String(n.id) === String(id));
     try {
         const { data } = await window.supabase.from('vista_negocios_admin').select('*').eq('id', id).limit(1);
-        const fila = data?.[0];
+        // Solo se acepta la fila de ESTE salon: nunca mezclar datos de otro.
+        const fila = (data || []).find(f => String(f.id) === String(id));
         if (fila && i !== -1) {
             // Los extras no vienen en la vista (ver cargarNegocios): se conservan.
             const extras = Object.fromEntries(CAMPOS_EXTRA_NEGOCIO.map(c => [c, negociosData[i][c]]));
@@ -975,8 +981,18 @@ function prepararModal(modal, titulo) {
 }
 window.prepararModal = prepararModal;
 
+// Casilla del descuento de cumpleaños: deja el monto sugerido con el 30 % o
+// vuelve al precio completo.
+window.alternarDescuentoCumple = function(aplicar) {
+    const monto = document.getElementById('pagado-hasta-monto');
+    if (monto) monto.value = aplicar ? montoConDescuentoCumple() : PRECIO_MENSUAL;
+};
+
 function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
     const fechaBase = String(fechaActual || calcularFechaMasDias(DIAS_POR_DEFECTO)).slice(0, 10);
+    const negocioPago = negociosData.find(n => String(n.id) === String(id));
+    const hayDescuentoCumple = Boolean(negocioPago) && descuentoCumplePendiente(negocioPago);
+    const cumplePago = hayDescuentoCumple ? cumpleDuena(negocioPago) : null;
     const modalExistente = document.getElementById('modal-pagado-hasta');
     if (modalExistente) modalExistente.remove();
 
@@ -995,7 +1011,12 @@ function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
             <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de vencimiento</label>
             <input id="pagado-hasta-fecha" type="date" value="${fechaBase}" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
             <label class="block text-sm font-medium text-gray-700 mt-4 mb-1">Monto pagado CUP</label>
-            <input id="pagado-hasta-monto" type="number" min="1" step="1" value="${PRECIO_MENSUAL}" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+            <input id="pagado-hasta-monto" type="number" min="1" step="1" value="${hayDescuentoCumple ? montoConDescuentoCumple() : PRECIO_MENSUAL}" class="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+            ${hayDescuentoCumple ? `
+            <label class="mt-3 flex items-start gap-3 rounded-md border border-purple-200 bg-purple-50 p-3 text-sm text-purple-900 cursor-pointer">
+                <input id="pagado-hasta-cumple" type="checkbox" checked onchange="alternarDescuentoCumple(this.checked)" class="mt-0.5 h-5 w-5 shrink-0">
+                <span><strong>Descuento de cumpleaños (${DESCUENTO_CUMPLE_ADMIN} %)</strong><br>Cumple el ${cumplePago.dia} de ${MESES_CUMPLE[cumplePago.mes - 1]}. Deja el monto en ${montoConDescuentoCumple()} y anota que ya se aplicó este año.</span>
+            </label>` : ''}
             <p class="text-xs text-gray-500 mt-2">Ejemplo: si eliges el 25 de septiembre, el salón queda pagado hasta ese día.</p>
             <div class="flex gap-2 mt-5">
                 <button type="button" onclick="document.getElementById('modal-pagado-hasta')?.remove()" class="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">Cancelar</button>
@@ -1010,6 +1031,7 @@ function abrirModalPagadoHasta(id, nombreNegocio, fechaActual = '') {
 async function guardarPagadoHasta(id) {
     const fecha = document.getElementById('pagado-hasta-fecha')?.value;
     const monto = parseFloat(document.getElementById('pagado-hasta-monto')?.value || PRECIO_MENSUAL);
+    const aplicaCumple = document.getElementById('pagado-hasta-cumple')?.checked === true;
 
     if (!fecha) {
         alert('Elige una fecha válida.');
@@ -1031,9 +1053,20 @@ async function guardarPagadoHasta(id) {
             .eq('negocio_id', id);
 
         if (error) throw error;
+
+        // El pago ya esta guardado: si anotar el descuento falla, se avisa y se
+        // podra volver a marcar, pero no se pierde el pago.
+        let cambios = {};
+        let avisoCumple = '';
+        if (aplicaCumple) {
+            const anio = new Date().getFullYear();
+            const { error: errorCumple } = await window.supabase.from('negocios').update({ cumple_descuento_anio: anio }).eq('id', id);
+            if (errorCumple) avisoCumple = `\n\nOjo: no se pudo anotar el descuento de cumpleaños (${errorCumple.message}). Puedes volver a marcarlo.`;
+            else cambios = { cumple_descuento_anio: anio };
+        }
         document.getElementById('modal-pagado-hasta')?.remove();
-        alert(`Pago actualizado. Pagado hasta: ${fecha}`);
-        await refrescarNegocio(id);
+        alert(`Pago actualizado. Pagado hasta: ${fecha}${avisoCumple}`);
+        await refrescarNegocio(id, cambios);
     } catch (error) {
         alert('Error actualizando pago: ' + error.message);
     }
@@ -1623,6 +1656,62 @@ function bajaActividad(n) {
 }
 window.bajaActividad = bajaActividad;
 
+// ==================== CUMPLEAÑOS DE LAS DUEÑAS ====================
+// La duena pone su cumpleanos (dia y mes) al abrir su panel
+// (rservasroma/utils/cumpleanos.js). En su mes tiene 30 % de descuento en la
+// suscripcion: no hay pasarela, asi que se aplica aqui, a mano, al registrar el
+// pago, y se anota el año para que no se repita (negocios.cumple_descuento_anio).
+const DESCUENTO_CUMPLE_ADMIN = 30;
+const MESES_CUMPLE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+function cumpleDuena(n) {
+    const dia = parseInt(n?.cumple_admin_dia, 10);
+    const mes = parseInt(n?.cumple_admin_mes, 10);
+    return mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31 ? { dia, mes } : null;
+}
+
+// Proximo cumpleanos desde hoy (hoy cuenta): { fecha, dias } o null. El 29 de
+// febrero cae el 28 en los años que no son bisiestos.
+function proximoCumpleDuena(n, hoy = new Date()) {
+    const c = cumpleDuena(n);
+    if (!c) return null;
+    const base = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const enAnio = anio => new Date(anio, c.mes - 1, Math.min(c.dia, new Date(anio, c.mes, 0).getDate()));
+    let fecha = enAnio(base.getFullYear());
+    if (fecha < base) fecha = enAnio(base.getFullYear() + 1);
+    return { fecha, dias: Math.round((fecha - base) / 86400000) };
+}
+
+// Esta en su mes y aun no se le aplico el descuento este año.
+function descuentoCumplePendiente(n, hoy = new Date()) {
+    const c = cumpleDuena(n);
+    return Boolean(c) && c.mes === hoy.getMonth() + 1 && Number(n.cumple_descuento_anio) !== hoy.getFullYear();
+}
+
+// Su cumpleanos llega en una semana (o ya esta en su mes) y no se le ha aplicado
+// el descuento de ese año.
+function cumpleCercano(n, hoy = new Date()) {
+    const prox = proximoCumpleDuena(n, hoy);
+    if (!prox) return false;
+    if (descuentoCumplePendiente(n, hoy)) return true;
+    return prox.dias <= 7 && Number(n.cumple_descuento_anio) !== prox.fecha.getFullYear();
+}
+
+function montoConDescuentoCumple() {
+    return Math.round(PRECIO_MENSUAL * (100 - DESCUENTO_CUMPLE_ADMIN) / 100);
+}
+
+function chipCumple(n) {
+    const c = cumpleDuena(n);
+    if (!c) return '';
+    const hoy = new Date();
+    if (c.mes === hoy.getMonth() + 1 && Number(n.cumple_descuento_anio) === hoy.getFullYear()) {
+        return chip('Descuento de cumpleaños aplicado', 'verde');
+    }
+    if (descuentoCumplePendiente(n, hoy)) return chip(`Cumple este mes · ${DESCUENTO_CUMPLE_ADMIN} % pendiente`, 'ambar');
+    return chip(`Cumple el ${c.dia} de ${MESES_CUMPLE[c.mes - 1]}`, 'gris');
+}
+
 // ==================== PLANTILLAS DE WHATSAPP ====================
 // Un mensaje por situacion, en tuteo. Ninguna menciona el precio y ninguna
 // lleva contrasenas. Se pueden editar antes de enviar.
@@ -1668,6 +1757,14 @@ const PLANTILLAS = {
         titulo: 'Bajó su actividad',
         texto: n => `Hola, te escribimos desde RservasRoma. Vimos que esta semana ${n.nombre || 'tu salón'} recibió menos reservas que de costumbre. ¿Todo bien con la app? Si algo no te funciona, lo revisamos contigo.`,
     },
+    cumpleanos: {
+        titulo: 'Feliz cumpleaños',
+        texto: n => {
+            const c = cumpleDuena(n);
+            const mes = c ? MESES_CUMPLE[c.mes - 1] : 'tu mes';
+            return `Hola, te escribimos desde RservasRoma. ¡Feliz cumpleaños! 🎂 Para celebrarlo, en ${mes} tienes ${DESCUENTO_CUMPLE_ADMIN} % de descuento en tu suscripción de ${n.nombre || 'tu salón'}. Cuando vayas a pagar, avísanos y lo aplicamos.`;
+        },
+    },
     finanzas: {
         titulo: 'Probar Roma Finanzas',
         texto: () => 'Hola, te escribimos desde RservasRoma. ¿Ya probaste Roma Finanzas en tu panel? Te dice cuánto te deja cada servicio después de pagar los materiales. Si quieres, te enseñamos a usarla en 5 minutos.',
@@ -1688,6 +1785,7 @@ function sugerirPlantilla(n) {
     const fecha = fechaPagoDe(n);
     const dias = fecha && !esFechaHeredada(fecha) ? diasHastaPago(fecha) : null;
     if (dias != null && dias <= 3 && dias >= -7) return 'vence';
+    if (cumpleCercano(n)) return 'cumpleanos';
     const problemas = diagnosticarNegocio(n);
     if (problemas.length === 1 && problemas[0] === 'sin horarios') return 'sin_horarios';
     if (problemas.length === 1 && problemas[0].includes('sin profesional') && /^\d/.test(problemas[0])) return 'servicio_sin_profesional';
@@ -2487,6 +2585,23 @@ function calcularBandejaHoy() {
         acciones: [enlaceWhatsApp(c.n)],
     }));
 
+    // Cumpleaños de las duenas en los proximos 7 dias (o ya en su mes) con el
+    // descuento de 30 % sin aplicar: se les saluda y se les recuerda.
+    salones.filter(n => ['activa', 'trial'].includes(n.estado_suscripcion) && cumpleCercano(n)).forEach(n => {
+        const prox = proximoCumpleDuena(n);
+        const c = cumpleDuena(n);
+        const cuando = prox.dias === 0 ? 'Cumple hoy' : prox.dias === 1 ? 'Cumple mañana'
+            : prox.dias <= 7 ? `Cumple el ${c.dia} de ${MESES_CUMPLE[c.mes - 1]}` : `Cumple años este mes (el ${c.dia})`;
+        agregar({
+            peso: 4.8, tipo: 'Cumpleaños', area: 'comercial', negocioId: n.id, titulo: n.nombre,
+            detalle: `${cuando}: salúdala y recuérdale su ${DESCUENTO_CUMPLE_ADMIN} % de descuento en la suscripción.`,
+            acciones: [
+                enlaceWhatsApp(n, 'WhatsApp', 'cumpleanos'),
+                `<button type="button" onclick="window.abrirModalPagadoHasta(${jsArg(n.id)}, ${jsArg(n.nombre)}, ${jsArg(fechaPagoDe(n) || '')})" class="${BTN_SEC}">Registrar pago</button>`,
+            ],
+        });
+    });
+
     // Salones que pagan y esta semana sacaron menos de la mitad de lo normal.
     salones.filter(n => n.estado_suscripcion === 'activa').forEach(n => {
         const baja = bajaActividad(n);
@@ -2840,6 +2955,7 @@ function tarjetaNegocio(n, posicion) {
                 <h2 class="text-base font-semibold text-gray-900 break-words min-w-0">${nombreMostrado}</h2>
                 ${chip(estadoTexto, estadoTono, true)}
                 ${badgeWizard(n)}
+                ${chipCumple(n)}
                 ${reservasHoy > 0 ? chip(`+${reservasHoy} hoy`, 'morado') : ''}
                 ${esPendiente ? chip('Marcado', 'morado', true) : ''}
                 ${esEliminado ? chip('Oculto', 'gris') : ''}
