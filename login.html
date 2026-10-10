@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entrar · SuperAdmin RservasRoma</title>
     <meta name="theme-color" content="#6d28d9">
+    <!-- Sin el manifiesto y el service worker aqui, Chrome nunca ofrecia instalar la app:
+         quien no tiene la sesion iniciada siempre aterriza en esta pagina. -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <!-- Estilos ya generados (tools/tailwind/tailwind.config.js): el CDN de Tailwind
          bajaba un compilador y generaba los estilos en el telefono en cada apertura. -->
     <link rel="stylesheet" href="vendor/tailwind.css?v=20261007-cumple1">
@@ -96,6 +102,11 @@
                 document.getElementById('password').focus();
             }
         });
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
     </script>
 </body>
 </html>
