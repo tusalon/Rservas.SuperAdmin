@@ -836,6 +836,17 @@ async function reiniciarNegocioCompleto(id, nombreNegocio) {
 
         alert(`Negocio reiniciado.\n\nAl volver a entrar vera el asistente de configuracion inicial.\n\n${resumen}`);
         await refrescarNegocio(id, { configurado: false });
+
+        // El salon vuelve a empezar: se le ofrece el mismo mensaje de bienvenida que
+        // se manda al darlo de alta (enlace de reservas, panel y usuario). La
+        // contrasena no cambia con el reinicio y nunca va en este mensaje.
+        const negocioReiniciado = negociosData.find(n => String(n.id) === String(id));
+        if (negocioReiniciado && confirm(
+            `¿Enviar ahora por WhatsApp el mensaje de bienvenida a ${nombre}, con sus datos, como si fuera un salón nuevo?\n\n` +
+            'Lleva el enlace de reservas, el panel y el usuario. La contraseña sigue siendo la misma y no se envía.'
+        )) {
+            await generarMensajeCliente(negocioReiniciado);
+        }
     } catch (error) {
         alert('Error: ' + error.message);
     }
