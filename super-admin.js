@@ -1066,6 +1066,17 @@ async function guardarPagadoHasta(id) {
 
         if (error) throw error;
 
+        // Un pago deja la suscripcion activa. Antes solo cambiaba la fecha y el salon seguia en
+        // "trial": RomaCrece (y sus funciones de IA) exigen estado "activa" y le decian "mensualidad
+        // no activa" a quien ya habia pagado. Solo pasa de trial a activa: una suscripcion suspendida
+        // o cancelada se reactiva a mano con su boton.
+        const { error: errorEstado } = await window.supabase
+            .from('suscripciones')
+            .update({ estado: 'activa' })
+            .eq('negocio_id', id)
+            .eq('estado', 'trial');
+        if (errorEstado) console.warn('No se pudo pasar la suscripción a activa:', errorEstado);
+
         // El pago ya esta guardado: si anotar el descuento falla, se avisa y se
         // podra volver a marcar, pero no se pierde el pago.
         let cambios = {};
