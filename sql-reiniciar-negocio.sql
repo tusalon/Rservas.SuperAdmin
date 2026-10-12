@@ -107,8 +107,14 @@ begin
     get diagnostics borradas = row_count;
     resumen := resumen || jsonb_build_object('negocios', borradas);
   else
-    -- Que vuelva a ver el asistente de configuracion inicial.
-    update public.negocios set configurado = false where id = p_negocio_id;
+    -- Que vuelva a ver el asistente de configuracion inicial, como si fuera su primera vez:
+    -- la fecha de registro pasa a hoy y se le crea una prueba nueva de 30 dias (la
+    -- suscripcion se borro arriba y solo el trigger on_negocio_created sabia crearla,
+    -- asi que un salon reiniciado se quedaba sin suscripcion y con los dias de siempre).
+    update public.negocios set configurado = false, fecha_registro = now() where id = p_negocio_id;
+    insert into public.suscripciones (negocio_id, plan, estado, fecha_inicio, fecha_renovacion, notas)
+    values (p_negocio_id, 'gratuito', 'trial', now(), now() + interval '30 days', 'Reinicio de cuenta - período de prueba nuevo');
+    resumen := resumen || jsonb_build_object('prueba_nueva', 1);
   end if;
 
   return resumen;

@@ -674,6 +674,7 @@ const ETIQUETAS_TABLAS = Object.fromEntries(
         ['roma_finanzas_services', 'RomaFinanzas servicios'],
         ['roma_finanzas_fichas_costo', 'RomaFinanzas fichas de costo'],
         ['roma_finanzas_config', 'RomaFinanzas configuracion'],
+        ['prueba_nueva', 'Prueba de 30 dias nueva'],
     ]
 );
 
@@ -837,15 +838,15 @@ async function reiniciarNegocioCompleto(id, nombreNegocio) {
         alert(`Negocio reiniciado.\n\nAl volver a entrar vera el asistente de configuracion inicial.\n\n${resumen}`);
         await refrescarNegocio(id, { configurado: false });
 
-        // El salon vuelve a empezar: se le ofrece el mismo mensaje de bienvenida que
-        // se manda al darlo de alta (enlace de reservas, panel y usuario). La
-        // contrasena no cambia con el reinicio y nunca va en este mensaje.
-        const negocioReiniciado = negociosData.find(n => String(n.id) === String(id));
-        if (negocioReiniciado && confirm(
-            `¿Enviar ahora por WhatsApp el mensaje de bienvenida a ${nombre}, con sus datos, como si fuera un salón nuevo?\n\n` +
-            'Lleva el enlace de reservas, el panel y el usuario. La contraseña sigue siendo la misma y no se envía.'
-        )) {
-            await generarMensajeCliente(negocioReiniciado);
+        // El salon vuelve a empezar: se abre el mensaje de bienvenida del alta (enlace de
+        // reservas, panel y usuario) para enviarlo por WhatsApp. La contrasena no cambia
+        // con el reinicio y nunca va en este mensaje. Va en un modal propio: copiar al
+        // portapapeles o abrir WhatsApp justo despues de varios avisos lo bloquea el
+        // navegador, y un fallo aqui no debe parecer que el reinicio fallo.
+        try {
+            abrirWhatsAppConPlantilla(id, 'nuevo_salon');
+        } catch (errorMensaje) {
+            console.warn('No se pudo abrir el mensaje de bienvenida tras reiniciar:', errorMensaje);
         }
     } catch (error) {
         alert('Error: ' + error.message);
@@ -1737,6 +1738,10 @@ function cuandoVencePago(n) {
 }
 
 const PLANTILLAS = {
+    nuevo_salon: {
+        titulo: 'Bienvenida de salón nuevo (con sus datos)',
+        texto: n => crearMensajeEntregaCliente(n)
+    },
     saludo: {
         titulo: 'Saludo de soporte',
         texto: n => `Hola, te escribimos desde el soporte de RservasRoma. ¿Cómo te va con la app de ${n.nombre || 'tu salón'}? ¿Hay algo en lo que te podamos ayudar?`,
