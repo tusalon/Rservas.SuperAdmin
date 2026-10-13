@@ -674,7 +674,7 @@ const ETIQUETAS_TABLAS = Object.fromEntries(
         ['roma_finanzas_services', 'RomaFinanzas servicios'],
         ['roma_finanzas_fichas_costo', 'RomaFinanzas fichas de costo'],
         ['roma_finanzas_config', 'RomaFinanzas configuracion'],
-        ['prueba_nueva', 'Prueba de 30 dias nueva'],
+        ['prueba_nueva', 'Prueba de 15 dias nueva'],
     ]
 );
 
