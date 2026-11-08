@@ -2796,7 +2796,8 @@ function renderHeader() {
                         <p class="text-sm text-purple-100">${fechaActual} · ${horaDatos}</p>
                     </div>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
+                    ${window.botonNuevoSalon ? window.botonNuevoSalon() : ''}
                     <button type="button" onclick="location.reload()" class="${BTN_OSCURO}">Recargar</button>
                     ${menuDesplegable('Más', `
                         <p class="px-3 pt-1 text-xs font-semibold text-gray-600">Avisos a las apps</p>
@@ -3489,6 +3490,8 @@ async function init() {
     // Soporte y RomaHub: en segundo plano, no bloquean el panel si una tabla
     // aun no existe (F5 recien desplegado).
     Object.keys(CARGAS_SECUNDARIAS).forEach(recargarSeccion);
+    // Solicitudes de alta que llegaron por la web (nuevo-cliente.js).
+    window.cargarSolicitudesAlta?.();
 }
 
 // Iniciar cuando el DOM esté listo
