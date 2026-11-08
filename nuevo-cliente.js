@@ -107,7 +107,12 @@ function slugDesdeNombre(nombre) {
     return base.length >= 2 ? base : 'salon';
 }
 
-const PAISES_ALTA = [['53', 'Cuba (+53)'], ['1', 'EE. UU. (+1)'], ['34', 'España (+34)'], ['52', 'México (+52)'], ['otro', 'Otro país…']];
+// Misma lista que el formulario de la web (HouseofRservasRoma/app.js): toda América y España.
+const PAISES_ALTA = [
+    ['Cuba', '53'], ['EE. UU.', '1'], ['México', '52'], ['España', '34'],
+    ...[['Antigua y Barbuda', '1'], ['Argentina', '54'], ['Aruba', '297'], ['Bahamas', '1'], ['Barbados', '1'], ['Belice', '501'], ['Bermudas', '1'], ['Bolivia', '591'], ['Brasil', '55'], ['Canadá', '1'], ['Chile', '56'], ['Colombia', '57'], ['Costa Rica', '506'], ['Curazao', '599'], ['Dominica', '1'], ['Ecuador', '593'], ['El Salvador', '503'], ['Granada', '1'], ['Guadalupe', '590'], ['Guatemala', '502'], ['Guayana Francesa', '594'], ['Guyana', '592'], ['Haití', '509'], ['Honduras', '504'], ['Islas Caimán', '1'], ['Jamaica', '1'], ['Martinica', '596'], ['Nicaragua', '505'], ['Panamá', '507'], ['Paraguay', '595'], ['Perú', '51'], ['Puerto Rico', '1'], ['R. Dominicana', '1'], ['San Cristóbal y Nieves', '1'], ['San Vicente', '1'], ['Santa Lucía', '1'], ['Surinam', '597'], ['Trinidad y Tobago', '1'], ['Uruguay', '598'], ['Venezuela', '58']]
+        .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+].map(([n, c]) => [c, n + ' (+' + c + ')']).concat([['otro', 'Otro país…']]);
 
 const MOTIVOS_ALTA = {
     nombre_invalido: 'Escribe el nombre del salón (entre 2 y 80 letras).',
