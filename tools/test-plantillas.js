@@ -29,6 +29,7 @@ const contexto = {
     auditoria: {},
     diagnosticarNegocio: n => contexto.problemas[n.id] || [],
     obtenerUrlPublicaNegocio: n => `https://tusalon.github.io/${n.id}/`,
+    crearMensajeEntregaCliente: () => 'Bienvenida de prueba',
     window: {},
 };
 contexto.window.obtenerAuditoriaComercial = id => contexto.auditoria[id] || null;
@@ -139,5 +140,33 @@ Object.entries(PLANTILLAS).forEach(([clave, plantilla]) => {
     assert.ok(!/contraseña|password/i.test(texto), `${clave}: no debe llevar contraseñas`);
     assert.ok(!/usted|ayudarle/i.test(texto), `${clave}: en tuteo`);
 });
+
+// --- Revision salon por salon (revision-negocios.js): una situacion por salon, con datos reales
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'revision-negocios.js'), 'utf8'), contexto);
+contexto.eliminadosLocal = [];
+const { situacionRevision } = contexto;
+const rev = (id, extra, uso = {}) => {
+    contexto.actividadPorNegocio[id] = { reservas_30: 0, reservas_total: 0, citas_futuras: 0, ...uso };
+    return situacionRevision({ id, estado_suscripcion: 'trial', configurado: true, ...extra });
+};
+assert.equal(rev('r1', { estado_suscripcion: 'activa', proximo_pago: enDias(30) }), 'al_dia');
+assert.equal(rev('r2', { estado_suscripcion: 'activa', proximo_pago: enDias(3) }), 'por_vencer');
+assert.equal(rev('r3', { estado_suscripcion: 'activa', proximo_pago: enDias(-5) }, { reservas_30: 4, reservas_total: 9 }), 'pago_sin_registrar', 'vencido pero con citas: falta registrar o usa sin pagar');
+assert.equal(rev('r4', { estado_suscripcion: 'activa', proximo_pago: enDias(-5) }, { reservas_total: 9 }), 'dejo_de_pagar');
+assert.equal(rev('r5', { estado_suscripcion: 'activa', proximo_pago: '2026-05-01' }), 'plan_sin_fecha', 'fecha anterior al corte');
+assert.equal(rev('r6', { fecha_ultimo_pago: '2026-04-18T10:00:00Z', proximo_pago: enDias(-40) }), 'pago_en_prueba', 'tiene pago anotado y sigue en prueba');
+assert.equal(rev('r7', { proximo_pago: enDias(2) }), 'prueba_por_terminar');
+assert.equal(rev('r8', { proximo_pago: enDias(20) }), 'prueba_vigente');
+assert.equal(rev('r9', { proximo_pago: enDias(-30) }, { reservas_30: 3, reservas_total: 20 }), 'prueba_terminada_con_uso');
+assert.equal(rev('r10', { proximo_pago: enDias(-30) }, { reservas_total: 20 }), 'prueba_terminada_poco_uso');
+assert.equal(rev('r11', { proximo_pago: enDias(-30), configurado: false }), 'nunca_configuro');
+assert.equal(rev('r12', { proximo_pago: enDias(-30) }), 'nunca_reservo');
+assert.equal(rev('r13', { estado_suscripcion: 'suspendida' }), 'suspendida');
+assert.ok(PLANTILLAS.pago_a_confirmar && PLANTILLAS.prueba_terminada_con_uso && PLANTILLAS.prueba_por_terminar && PLANTILLAS.dejo_de_pagar, 'plantillas de la revision');
+contexto.actividadPorNegocio.u = { reservas_30: 7, reservas_total: 20, citas_futuras: 0 };
+assert.ok(/7 en los últimos 30 días/.test(PLANTILLAS.prueba_terminada_con_uso.texto({ id: 'u', nombre: 'Salón X' })), 'usa las citas reales');
+assert.ok(/pronto/.test(PLANTILLAS.prueba_por_terminar.texto({ id: 'u', nombre: 'Salón X', proximo_pago: enDias(-3) })), 'sin fecha futura no dice «en -3 días»');
+// const de un script en vm no cuelga del contexto: se lee con runInContext.
+vm.runInContext('SITUACIONES_REV', contexto).forEach(s => assert.ok(PLANTILLAS[s.plantilla], `la situacion ${s.k} apunta a una plantilla que no existe`));
 
 console.log('plantillas y alertas: OK');

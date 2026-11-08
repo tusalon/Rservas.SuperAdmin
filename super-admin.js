@@ -1748,6 +1748,20 @@ function cuandoVencePago(n) {
     return `el ${_fechaCorta(fecha)}`;
 }
 
+// Uso real del salón: citas de los últimos 30 días, totales, próximas y la última. Sale de la
+// auditoría comercial y, si todavía no cargó, de la actividad que trae la base.
+function resumenUsoSalon(n) {
+    const a = window.obtenerAuditoriaComercial?.(n.id);
+    const f = actividadPorNegocio[n.id] || {};
+    return {
+        r30: Number(a?.reservations30 ?? f.reservas_30 ?? 0),
+        total: Number(a?.total ?? f.reservas_total ?? 0),
+        futuras: Number(a?.futureAppointments ?? f.citas_futuras ?? 0),
+        ultima: a?.lastPastAppointment || f.ultima_cita || null,
+    };
+}
+window.resumenUsoSalon = resumenUsoSalon;
+
 const PLANTILLAS = {
     nuevo_salon: {
         titulo: 'Bienvenida de salón nuevo (con sus datos)',
@@ -1779,6 +1793,36 @@ const PLANTILLAS = {
     vence: {
         titulo: 'Vence la suscripción',
         texto: n => `Hola, te escribimos desde RservasRoma. Tu suscripción de ${n.nombre || 'tu salón'} vence ${cuandoVencePago(n)}. Cuando hagas el pago, avísanos por aquí y lo registramos enseguida para que no se te bloquee el panel.`,
+    },
+    // Situaciones de la revisión de pagos (revision-negocios.js). Hablan con los datos reales
+    // del salón: citas de los últimos 30 días, fecha de prueba, último pago anotado.
+    pago_a_confirmar: {
+        titulo: '¿Pagaste y no lo registramos?',
+        texto: n => `Hola, te escribimos desde RservasRoma. Estamos poniendo al día los pagos de la app y en ${n.nombre || 'tu salón'} no vemos registrado el último${n.fecha_ultimo_pago ? ` (el anterior que tenemos es del ${_fechaCorta(n.fecha_ultimo_pago)})` : ''}. Si ya lo hiciste, ¿nos pasas la captura o la fecha para anotarlo? Si todavía no, avísanos cuando puedas y lo dejamos listo.`,
+    },
+    prueba_terminada_con_uso: {
+        titulo: 'Terminó la prueba y sigue usando la app',
+        texto: n => {
+            const r = resumenUsoSalon(n);
+            return `Hola, te escribimos desde RservasRoma. La prueba gratis de ${n.nombre || 'tu salón'} ya terminó y vemos que sigues recibiendo reservas${r.r30 ? ` (${r.r30} en los últimos 30 días)` : ''}. ¿Quieres seguir con la app? Te explicamos cómo activarla y, si ya pagaste, dinos para registrarlo.`;
+        },
+    },
+    prueba_por_terminar: {
+        titulo: 'Se acaba la prueba',
+        texto: n => {
+            const r = resumenUsoSalon(n);
+            const dias = diasHastaPago(fechaPagoDe(n));
+            const cuando = dias == null || dias < 0 ? 'pronto' : dias === 0 ? 'hoy' : dias === 1 ? 'mañana' : `en ${dias} días`;
+            return `Hola, te escribimos desde RservasRoma. La prueba gratis de ${n.nombre || 'tu salón'} termina ${cuando}${r.total ? ` y ya llevas ${r.total} reserva${r.total === 1 ? '' : 's'} en la app` : ''}. ¿Quieres que te acompañemos para dejarla activa y que no se corte el panel?`;
+        },
+    },
+    dejo_de_pagar: {
+        titulo: 'Hace tiempo que no vemos su pago',
+        texto: n => `Hola, te escribimos desde RservasRoma. Vimos que el plan de ${n.nombre || 'tu salón'} venció ${cuandoVencePago(n)} y no tenemos el pago nuevo. ¿Pasó algo, o prefieres que lo dejemos en pausa? Si ya pagaste, dinos para anotarlo.`,
+    },
+    prueba_terminada_sin_uso: {
+        titulo: 'Terminó la prueba, casi no la usó',
+        texto: n => `Hola, te escribimos desde RservasRoma. Hace un tiempo abriste ${n.nombre || 'tu salón'} en la app y vemos que casi no la llegaste a usar. ¿Te quedó alguna duda o algo que no te funcionó? Si quieres, la dejamos lista contigo en unos minutos.`,
     },
     bajo_actividad: {
         titulo: 'Bajó su actividad',
@@ -2798,6 +2842,7 @@ function renderHeader() {
                 </div>
                 <div class="flex flex-wrap gap-2">
                     ${window.botonNuevoSalon ? window.botonNuevoSalon() : ''}
+                    ${window.botonRevision ? window.botonRevision() : ''}
                     <button type="button" onclick="location.reload()" class="${BTN_OSCURO}">Recargar</button>
                     ${menuDesplegable('Más', `
                         <p class="px-3 pt-1 text-xs font-semibold text-gray-600">Avisos a las apps</p>
