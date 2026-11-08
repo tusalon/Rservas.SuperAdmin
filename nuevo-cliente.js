@@ -264,6 +264,16 @@ function abrirNuevoCliente(solicitud = null) {
     $('nc-email').addEventListener('input', () => { $('nc-conflicto').classList.add('hidden'); });
     pintarEnlace();
 
+    // Si la solicitud trae el país ("+34 612345678", así lo guarda la web), se marca solo
+    // y el teléfono queda sin el prefijo. Sin "+", se deja Cuba como antes.
+    const conPais = /^\+(\d{1,4})\s+(.+)$/.exec((s?.whatsapp || '').trim());
+    if (conPais) {
+        const [, cod, resto] = conPais;
+        if (PAISES_ALTA.some(([v]) => v === cod)) $('nc-pais').value = cod;
+        else { $('nc-pais').value = 'otro'; $('nc-pais-otro').value = cod; $('nc-pais-otro').classList.remove('hidden'); }
+        $('nc-telefono').value = resto;
+    }
+
     modal.querySelector('#nc-form').addEventListener('submit', async e => {
         e.preventDefault();
         mostrarError('');
