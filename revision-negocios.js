@@ -127,7 +127,7 @@ function tarjetaRevision(n, sit) {
             <dl class="mt-2 space-y-0.5 text-sm">${filas}</dl>
             <p class="mt-2 text-sm text-gray-700"><span class="font-medium">Qué revisar:</span> ${escapeHtml(s.que)}</p>
             <div class="mt-2 flex flex-wrap gap-2">
-                ${tel ? enlaceWhatsApp(n, 'Escribir por WhatsApp', s.plantilla) : '<span class="text-sm text-red-700">Sin teléfono válido</span>'}
+                ${tel ? `<button type="button" onclick="abrirChatRevision(${jsArg(n.id)})" class="${BTN_PRI}">Abrir chat</button>${enlaceWhatsApp(n, 'Con mensaje', s.plantilla)}` : '<span class="text-sm text-red-700">Sin teléfono válido</span>'}
                 ${botonRegistrarPago(n, BTN_SEC)}
             </div>
         </li>`;
@@ -199,6 +199,15 @@ function abrirRevision() {
     renderRevision();
 }
 
+// Abre el chat vacío: para mirar la conversación y decidir qué escribir en el momento. No lo anota
+// como contacto (solo el botón «Con mensaje» lo hace, porque ahí sí se escribe).
+function abrirChatRevision(id) {
+    const n = negociosData.find(x => String(x.id) === String(id));
+    const tel = n && normalizarTelefonoWhatsApp(n.telefono, n.codigo_pais);
+    if (!tel) { alert(`${n?.nombre || 'Este salón'} no tiene un teléfono válido.`); return; }
+    window.open(`https://wa.me/${tel}`, '_blank', 'noopener');
+}
+
 function verMasRevision() { revMostrar += 40; renderRevision(); }
 function filtrarRevision(clave) { revFiltro = clave; revMostrar = 40; renderRevision(); }
 
@@ -228,6 +237,7 @@ function botonRevision() {
 window.abrirRevision = abrirRevision;
 window.filtrarRevision = filtrarRevision;
 window.verMasRevision = verMasRevision;
+window.abrirChatRevision = abrirChatRevision;
 window.actualizarRevision = actualizarRevision;
 window.copiarListaRevision = copiarListaRevision;
 window.botonRevision = botonRevision;
